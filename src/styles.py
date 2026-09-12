@@ -1,56 +1,135 @@
 import flet as ft
+from typing import Callable, List
 
-# Swiss Precision / Minimalist Editorial Design System
-# Neutral monochrome foundations with crisp micro-contrasts and subtle electric accents
+# Design Tokens strictly matching specification
+# Light mode tokens
+LIGHT_BG = "#FAFAF9"
+LIGHT_SURFACE = "#FFFFFF"
+LIGHT_BORDER = "#E4E4E1"
+LIGHT_TEXT_PRIMARY = "#1C1C1A"
+LIGHT_TEXT_SECONDARY = "#6B6B66"
+LIGHT_ACCENT = "#2F6FED"
 
-BG_APP = "#FBFBFA"           # Editorial off-white / bone canvas
-BG_PANEL = "#FFFFFF"         # Crisp paper cards
-BG_SUBTLE = "#F6F6F4"        # Architectural muted fill
-BG_MUTED = "#F0F0ED"         # Micro-section and dropzone fill
-BG_ACTIVE = "#EAEAE6"        # Active container / pressed state
+# Light mode glass spec (using 0xAARRGGBB hex for robust Flutter parsing)
+# background: rgba(255, 255, 255, 0.72) -> #B8FFFFFF
+# border: 1px solid rgba(255, 255, 255, 0.4) -> #66FFFFFF or clean hairline #E4E4E1
+# box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08) -> #14000000
+LIGHT_GLASS_BG = "#B8FFFFFF"
+LIGHT_GLASS_BORDER = "#E4E4E1"
+LIGHT_GLASS_SHADOW_COLOR = "#14000000"
 
-# Crisp Micro-Borders
-BORDER_COLOR = "#E2E2DC"     # Architectural fine rule (1px)
-BORDER_FOCUS = "#18181B"     # High-contrast focus state
-BORDER_DASHED = "#CBCBC4"    # Subtle geometric dashed border
+# Dark mode tokens
+DARK_BG = "#121212"
+DARK_SURFACE = "#1B1B1B"
+DARK_BORDER = "#2E2E2C"
+DARK_TEXT_PRIMARY = "#F2F2EF"
+DARK_TEXT_SECONDARY = "#9A9A94"
+DARK_ACCENT = "#5B8DEF"
 
-# Typographic System
-FONT_PRIMARY = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-FONT_MONO = "'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace"
+# Dark mode glass spec
+# background: rgba(24, 24, 24, 0.6) -> #99181818
+# border: 1px solid rgba(255, 255, 255, 0.08) -> #14FFFFFF
+# box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) -> #66000000
+DARK_GLASS_BG = "#99181818"
+DARK_GLASS_BORDER = "#2E2E2C"
+DARK_GLASS_SHADOW_COLOR = "#66000000"
 
-TEXT_PRIMARY = "#111827"     # Deep carbon black
-TEXT_SECONDARY = "#52525B"   # Neutral graphite
-TEXT_TERTIARY = "#71717A"    # Subdued label text
-TEXT_MUTED = "#A1A1AA"       # Placeholder and caption text
+# Shared Radii Hierarchy
+# Larger radius (16-20px) on floating glass elements
+RADIUS_GLASS = 18
+# Smaller radius (4-8px) on flat structural panels
+RADIUS_PANEL = 6
 
-# Editorial Status / Accents
-ACCENT_ELECTRIC = "#2563EB"  # Electric precision blue
-ACCENT_ELECTRIC_BG = "#EFF6FF"
-ACCENT_ELECTRIC_BORDER = "#BFDBFE"
+# Typography tokens
+FONT_FAMILY_UI = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+FONT_FAMILY_MONO = "'JetBrains Mono', 'IBM Plex Mono', Menlo, Consolas, monospace"
 
-STATUS_READY_BG = "#F4F4F5"
-STATUS_READY_TEXT = "#3F3F46"
+class ThemeState:
+    def __init__(self):
+        self.is_dark: bool = False
+        self.reduced_motion: bool = False
+        self._listeners: List[Callable[[], None]] = []
 
-STATUS_SUCCESS_BG = "#ECFDF5"
-STATUS_SUCCESS_TEXT = "#059669"
-STATUS_SUCCESS_BORDER = "#A7F3D0"
+    def add_listener(self, listener: Callable[[], None]):
+        if listener not in self._listeners:
+            self._listeners.append(listener)
 
-STATUS_PROC_BG = "#FEF3C7"
-STATUS_PROC_TEXT = "#B45309"
-STATUS_PROC_BORDER = "#FDE68A"
+    def notify(self):
+        for listener in self._listeners:
+            try:
+                listener()
+            except Exception as ex:
+                print(f"Error in theme listener: {ex}")
 
-STATUS_ERR_BG = "#FEF2F2"
-STATUS_ERR_TEXT = "#DC2626"
-STATUS_ERR_BORDER = "#FECACA"
+    def toggle_theme(self):
+        self.is_dark = not self.is_dark
+        self.notify()
 
-# Buttons & Surfaces
-BTN_PRIMARY_BG = "#18181B"   # Pure carbon black button
-BTN_PRIMARY_HOVER = "#27272A"
-BTN_PRIMARY_TEXT = "#FFFFFF"
+    def set_reduced_motion(self, enabled: bool):
+        self.reduced_motion = enabled
+        self.notify()
 
-BTN_SECONDARY_BG = "#FFFFFF"
-BTN_SECONDARY_BORDER = "#D4D4D8"
-BTN_SECONDARY_TEXT = "#18181B"
+    # Active dynamic tokens
+    @property
+    def bg(self) -> str:
+        return DARK_BG if self.is_dark else LIGHT_BG
 
-NAV_RAIL_BG = "#F4F4F0"      # Tactile left vertical anchor bar
-NAV_RAIL_BORDER = "#E5E5DF"
+    @property
+    def surface(self) -> str:
+        return DARK_SURFACE if self.is_dark else LIGHT_SURFACE
+
+    @property
+    def border(self) -> str:
+        return DARK_BORDER if self.is_dark else LIGHT_BORDER
+
+    @property
+    def text_primary(self) -> str:
+        return DARK_TEXT_PRIMARY if self.is_dark else LIGHT_TEXT_PRIMARY
+
+    @property
+    def text_secondary(self) -> str:
+        return DARK_TEXT_SECONDARY if self.is_dark else LIGHT_TEXT_SECONDARY
+
+    @property
+    def accent(self) -> str:
+        return DARK_ACCENT if self.is_dark else LIGHT_ACCENT
+
+    @property
+    def glass_bg(self) -> str:
+        return DARK_GLASS_BG if self.is_dark else LIGHT_GLASS_BG
+
+    @property
+    def glass_border_color(self) -> str:
+        return DARK_GLASS_BORDER if self.is_dark else LIGHT_GLASS_BORDER
+
+    @property
+    def glass_border(self) -> ft.Border:
+        return ft.Border.all(1, self.glass_border_color)
+
+    @property
+    def glass_blur(self) -> ft.Blur:
+        return ft.Blur(20, 20)
+
+    @property
+    def glass_shadow(self) -> List[ft.BoxShadow]:
+        color = DARK_GLASS_SHADOW_COLOR if self.is_dark else LIGHT_GLASS_SHADOW_COLOR
+        blur_rad = 32 if self.is_dark else 20
+        offset_y = 8 if self.is_dark else 4
+        return [
+            ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=blur_rad,
+                color=color,
+                offset=ft.Offset(0, offset_y),
+            )
+        ]
+
+theme = ThemeState()
+
+# Compatibility constants
+BG_APP = LIGHT_BG
+BG_PANEL = LIGHT_SURFACE
+BORDER_COLOR = LIGHT_BORDER
+TEXT_PRIMARY = LIGHT_TEXT_PRIMARY
+TEXT_SECONDARY = LIGHT_TEXT_SECONDARY
+ACCENT = LIGHT_ACCENT

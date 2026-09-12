@@ -1,5 +1,5 @@
 import flet as ft
-from src import styles
+from src.styles import theme, RADIUS_PANEL, FONT_FAMILY_UI, FONT_FAMILY_MONO
 from src.app_state import state
 
 def safe_update(control: ft.Control):
@@ -9,201 +9,361 @@ def safe_update(control: ft.Control):
         pass
 
 class TextPanel(ft.Container):
-    def __init__(self):
-        super().__init__(
-            expand=True,
-            bgcolor=styles.BG_PANEL,
-            border=ft.Border.all(1, styles.BORDER_COLOR),
-            border_radius=12,
-            padding=16,
-        )
-        self.char_badge = ft.Container(
-            content=ft.Text("0 CHARS", size=11, weight=ft.FontWeight.W_600, color=styles.TEXT_SECONDARY),
-            bgcolor=styles.BG_SUBTLE,
-            border=ft.Border.all(1, styles.BORDER_COLOR),
-            border_radius=4,
-            padding=ft.Padding.symmetric(horizontal=8, vertical=3),
-        )
-        self.status_badge = ft.Container(
-            content=ft.Text("IDLE", size=11, weight=ft.FontWeight.BOLD, color=styles.TEXT_MUTED),
-            bgcolor=styles.STATUS_READY_BG,
-            border=ft.Border.all(1, styles.BORDER_COLOR),
-            border_radius=4,
-            padding=ft.Padding.symmetric(horizontal=8, vertical=3),
+    def __init__(self, on_extract_click=None):
+        self.on_extract_click = on_extract_click
+        self.is_raw_mode = True
+
+        # Header labels
+        self.header_title = ft.Text(
+            "Extracted text",
+            size=14,
+            weight=ft.FontWeight.W_500,
+            color=theme.text_primary,
+            font_family=FONT_FAMILY_UI,
         )
 
-        # Mode toggle: Formatted Markdown View vs Raw Monospace View
-        self.is_raw_mode = False
-        
-        # Raw text editor/viewer
-        self.raw_field = ft.TextField(
+        self.char_count_text = ft.Text(
+            "0 characters",
+            size=12,
+            color=theme.text_secondary,
+            font_family=FONT_FAMILY_UI,
+        )
+
+        self.status_label = ft.Text(
+            "Ready",
+            size=12,
+            weight=ft.FontWeight.W_500,
+            color=theme.text_secondary,
+            font_family=FONT_FAMILY_UI,
+        )
+
+        # Monospace Raw Output Field
+        self.raw_output_field = ft.TextField(
             value="",
-            read_only=True,
+            read_only=False,
             multiline=True,
             border=ft.InputBorder.NONE,
             text_size=13,
-            cursor_color=styles.TEXT_PRIMARY,
+            text_style=ft.TextStyle(
+                font_family=FONT_FAMILY_MONO,
+                color=theme.text_primary,
+                letter_spacing=0.2,
+            ),
+            cursor_color=theme.accent,
             expand=True,
+            content_padding=ft.Padding.all(14),
+            hint_text="Extracted text will appear here in monospace.",
+            hint_style=ft.TextStyle(font_family=FONT_FAMILY_UI, color=theme.text_secondary, size=13),
+            on_change=self._on_text_edited,
         )
 
-        # Markdown formatted viewer
-        self.markdown_view = ft.Markdown(
-            value="*Extracted text will be rendered here with complete markdown formatting.*",
+        # Formatted Markdown View
+        self.markdown_output_view = ft.Markdown(
+            value="*No text extracted yet.*",
             selectable=True,
             expand=True,
             soft_line_break=True,
         )
 
-        self.content_area = ft.Container(
+        # Flat, high-contrast text canvas (uses theme.bg for clean inner inset)
+        self.text_canvas = ft.Container(
             expand=True,
-            bgcolor=styles.BG_SUBTLE,
-            border=ft.Border.all(1, styles.BORDER_COLOR),
-            border_radius=8,
-            padding=16,
-            content=self.markdown_view,
+            bgcolor=theme.bg,
+            border=ft.Border.all(1, theme.border),
+            border_radius=RADIUS_PANEL,
+            content=self.raw_output_field,
         )
 
-        # Action Toolbar buttons
+        # Copy button (Toast 'Copied')
+        self.copy_icon = ft.Icon(ft.Icons.CONTENT_COPY_ROUNDED, size=14, color=theme.text_primary)
+        self.copy_text = ft.Text("Copy", size=12, weight=ft.FontWeight.W_500, color=theme.text_primary, font_family=FONT_FAMILY_UI)
         self.copy_btn = ft.OutlinedButton(
             content=ft.Row(
                 spacing=6,
-                controls=[
-                    ft.Icon(ft.Icons.COPY_ALL_ROUNDED, size=13, color=styles.TEXT_PRIMARY),
-                    ft.Text("COPY", size=11, weight=ft.FontWeight.BOLD, color=styles.TEXT_PRIMARY),
-                ],
+                controls=[self.copy_icon, self.copy_text],
             ),
             style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=6),
-                padding=ft.Padding.symmetric(horizontal=10, vertical=6),
-                side=ft.BorderSide(1, styles.BORDER_COLOR),
+                shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+                side=ft.BorderSide(1, theme.border),
+                padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+                bgcolor=theme.surface,
             ),
             on_click=self.on_copy_click,
-            visible=False,
+            tooltip="Copy text to clipboard",
         )
 
-        self.toggle_mode_btn = ft.OutlinedButton(
+        # View Mode toggle button
+        self.view_mode_icon = ft.Icon(ft.Icons.TEXT_SNIPPET_OUTLINED, size=14, color=theme.text_primary)
+        self.view_mode_text = ft.Text("Preview", size=12, weight=ft.FontWeight.W_500, color=theme.text_primary, font_family=FONT_FAMILY_UI)
+        self.view_mode_btn = ft.OutlinedButton(
             content=ft.Row(
                 spacing=6,
+                controls=[self.view_mode_icon, self.view_mode_text],
+            ),
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+                side=ft.BorderSide(1, theme.border),
+                padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+                bgcolor=theme.surface,
+            ),
+            on_click=self.toggle_mode,
+            tooltip="Switch between raw monospace and preview",
+        )
+
+        # Export button
+        self.export_icon = ft.Icon(ft.Icons.DOWNLOAD_ROUNDED, size=14, color=theme.text_primary)
+        self.export_text = ft.Text("Export", size=12, weight=ft.FontWeight.W_500, color=theme.text_primary, font_family=FONT_FAMILY_UI)
+        self.export_btn = ft.OutlinedButton(
+            content=ft.Row(
+                spacing=6,
+                controls=[self.export_icon, self.export_text],
+            ),
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+                side=ft.BorderSide(1, theme.border),
+                padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+                bgcolor=theme.surface,
+            ),
+            on_click=self.on_export_click,
+            tooltip="Export extracted text",
+        )
+
+        # Primary Action Button: 'Extract text'
+        self.extract_progress = ft.ProgressRing(width=14, height=14, stroke_width=2, color="#FFFFFF", visible=False)
+        self.extract_label = ft.Text(
+            "Extract text",
+            size=13,
+            weight=ft.FontWeight.W_500,
+            color="#FFFFFF",
+            font_family=FONT_FAMILY_UI,
+        )
+        self.extract_btn = ft.ElevatedButton(
+            content=ft.Row(
+                spacing=8,
+                alignment=ft.MainAxisAlignment.CENTER,
                 controls=[
-                    ft.Icon(ft.Icons.CODE_ROUNDED, size=13, color=styles.TEXT_PRIMARY),
-                    ft.Text("RAW", size=11, weight=ft.FontWeight.BOLD, color=styles.TEXT_PRIMARY),
+                    self.extract_progress,
+                    self.extract_label,
                 ],
             ),
             style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=6),
-                padding=ft.Padding.symmetric(horizontal=10, vertical=6),
-                side=ft.BorderSide(1, styles.BORDER_COLOR),
+                bgcolor=theme.accent,
+                shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+                padding=ft.Padding.symmetric(horizontal=16, vertical=10),
+                side=ft.BorderSide(2, theme.accent),
             ),
-            on_click=self.on_toggle_mode_click,
-            visible=False,
+            on_click=self.on_extract_click,
+            tooltip="Extract text from selected image",
         )
 
-        self.content = ft.Column(
-            alignment=ft.MainAxisAlignment.START,
-            spacing=12,
+        header_row = ft.Row(
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
-                # Top header & precision status
                 ft.Row(
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    spacing=10,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    controls=[
-                        ft.Row(
-                            spacing=8,
-                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                            controls=[
-                                ft.Container(width=6, height=6, border_radius=3, bgcolor=styles.TEXT_PRIMARY),
-                                ft.Text("EXTRACTED TRANSCRIPTION", size=11, weight=ft.FontWeight.BOLD, color=styles.TEXT_PRIMARY),
-                            ],
-                        ),
-                        ft.Row(
-                            spacing=8,
-                            controls=[
-                                self.toggle_mode_btn,
-                                self.copy_btn,
-                                self.char_badge,
-                                self.status_badge,
-                            ],
-                        ),
-                    ],
+                    controls=[self.header_title, self.char_count_text],
                 ),
-                self.content_area,
+                self.status_label,
             ],
         )
 
+        bottom_bar = ft.Row(
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            controls=[
+                ft.Row(
+                    spacing=8,
+                    controls=[
+                        self.copy_btn,
+                        self.view_mode_btn,
+                        self.export_btn,
+                    ],
+                ),
+                self.extract_btn,
+            ],
+        )
+
+        main_column = ft.Column(
+            expand=True,
+            spacing=10,
+            controls=[
+                header_row,
+                self.text_canvas,
+                bottom_bar,
+            ],
+        )
+
+        super().__init__(
+            expand=True,
+            bgcolor=theme.surface,
+            border=ft.Border.all(1, theme.border),
+            border_radius=RADIUS_PANEL,
+            padding=16,
+            content=main_column,
+        )
+
         state.add_listener(self.update_text_view)
+        theme.add_listener(self.update_theme_ui)
         self.update_text_view()
 
-    def on_toggle_mode_click(self, e):
+    def _on_text_edited(self, e):
+        item = state.selected_item
+        if item:
+            item.extracted_text = self.raw_output_field.value
+            self.markdown_output_view.value = item.extracted_text
+            self.char_count_text.value = f"{len(item.extracted_text):,} characters"
+
+    def toggle_mode(self, e):
         self.is_raw_mode = not self.is_raw_mode
-        self.toggle_mode_btn.content.controls[1].value = "PREVIEW" if self.is_raw_mode else "RAW"
-        self.content_area.content = self.raw_field if self.is_raw_mode else self.markdown_view
-        if self.page:
-            self.update()
+        self.view_mode_text.value = "Preview" if self.is_raw_mode else "Raw (Mono)"
+        self.text_canvas.content = self.raw_output_field if self.is_raw_mode else self.markdown_output_view
+        safe_update(self)
 
     def on_copy_click(self, e):
         item = state.selected_item
-        if item and item.extracted_text and self.page:
+        text_to_copy = self.raw_output_field.value or (item.extracted_text if item else "")
+        if text_to_copy and self.page:
             try:
-                self.page.set_clipboard(item.extracted_text)
-                self.page.show_dialog(ft.SnackBar(ft.Text("Transcription copied to clipboard!")))
+                self.page.set_clipboard(text_to_copy)
+                self.page.show_dialog(
+                    ft.SnackBar(
+                        content=ft.Text("Copied", size=13, weight=ft.FontWeight.W_500, color=theme.text_primary),
+                        bgcolor=theme.glass_bg,
+                        duration=1800,
+                    )
+                )
             except Exception:
                 pass
+
+    def on_export_click(self, e):
+        item = state.selected_item
+        text_content = self.raw_output_field.value or (item.extracted_text if item else "")
+        if not text_content:
+            return
+
+        def save_file(ext: str):
+            import os
+            fname = f"{os.path.splitext(item.file_name)[0] if item else 'extracted_text'}.{ext}"
+            export_path = os.path.expanduser(f"~/{fname}")
+            try:
+                with open(export_path, "w", encoding="utf-8") as f:
+                    f.write(text_content)
+                self.page.pop_dialog()
+                self.page.show_dialog(
+                    ft.SnackBar(
+                        content=ft.Text(f"Saved {fname} to home folder", size=13, color=theme.text_primary),
+                        bgcolor=theme.glass_bg,
+                    )
+                )
+            except Exception as ex:
+                self.page.show_dialog(
+                    ft.SnackBar(content=ft.Text(f"Export failed: {str(ex)}"), bgcolor="#EF4444")
+                )
+
+        export_dialog = ft.AlertDialog(
+            bgcolor=theme.glass_bg,
+            shape=ft.RoundedRectangleBorder(radius=16),
+            title=ft.Text("Export extracted text", size=16, weight=ft.FontWeight.W_600, color=theme.text_primary),
+            content=ft.Column(
+                tight=True,
+                spacing=8,
+                controls=[
+                    ft.ListTile(
+                        leading=ft.Icon(ft.Icons.DESCRIPTION_OUTLINED, color=theme.text_primary),
+                        title=ft.Text("Plain text (.txt)", size=13, color=theme.text_primary),
+                        on_click=lambda ev: save_file("txt"),
+                    ),
+                    ft.ListTile(
+                        leading=ft.Icon(ft.Icons.CODE_OUTLINED, color=theme.text_primary),
+                        title=ft.Text("Markdown (.md)", size=13, color=theme.text_primary),
+                        on_click=lambda ev: save_file("md"),
+                    ),
+                ],
+            ),
+            actions=[
+                ft.TextButton("Cancel", on_click=lambda ev: self.page.pop_dialog()),
+            ],
+        )
+        self.page.show_dialog(export_dialog)
+
+    def set_processing(self, is_processing: bool):
+        self.extract_progress.visible = is_processing
+        self.extract_label.value = "Extracting text..." if is_processing else "Extract text"
+        self.extract_btn.disabled = is_processing
+        safe_update(self)
 
     def update_text_view(self):
         item = state.selected_item
         if not item:
-            self.char_badge.content.value = "0 CHARS"
-            self.status_badge.content.value = "NO SELECTION"
-            self.status_badge.bgcolor = styles.STATUS_READY_BG
-            self.status_badge.content.color = styles.TEXT_MUTED
-            self.markdown_view.value = "*No document selected from the queue. Upload or scan an image to begin transcription.*"
-            self.raw_field.value = ""
-            self.copy_btn.visible = False
-            self.toggle_mode_btn.visible = False
+            self.char_count_text.value = "0 characters"
+            self.status_label.value = "No document loaded"
+            self.status_label.color = theme.text_secondary
+            self.raw_output_field.value = ""
+            self.markdown_output_view.value = "*Drop an image or PDF here to extract its text.*"
             safe_update(self)
             return
 
-        char_len = len(item.extracted_text) if item.extracted_text else 0
-        self.char_badge.content.value = f"{char_len:,} CHARS"
+        text = item.extracted_text or ""
+        self.char_count_text.value = f"{len(text):,} characters"
 
         if item.status == "Processing":
-            self.status_badge.content.value = "IN PROGRESS"
-            self.status_badge.bgcolor = styles.STATUS_PROC_BG
-            self.status_badge.border = ft.Border.all(1, styles.STATUS_PROC_BORDER)
-            self.status_badge.content.color = styles.STATUS_PROC_TEXT
-            self.markdown_view.value = "⏳ **Transcribing document via LLM vision model...**\n\nPreserving typography, tabular alignment, and formatting."
-            self.raw_field.value = "Transcribing..."
-            self.copy_btn.visible = False
-            self.toggle_mode_btn.visible = False
+            self.status_label.value = "Extracting text"
+            self.status_label.color = theme.accent
+            self.raw_output_field.value = "Extracting document text with vision model..."
+            self.markdown_output_view.value = "*Extracting document text with vision model...*"
         elif item.status == "Done":
-            self.status_badge.content.value = "TRANSCRIBED"
-            self.status_badge.bgcolor = styles.STATUS_SUCCESS_BG
-            self.status_badge.border = ft.Border.all(1, styles.STATUS_SUCCESS_BORDER)
-            self.status_badge.content.color = styles.STATUS_SUCCESS_TEXT
-            self.markdown_view.value = item.extracted_text
-            self.raw_field.value = item.extracted_text
-            self.copy_btn.visible = True
-            self.toggle_mode_btn.visible = True
+            self.status_label.value = "Done"
+            self.status_label.color = "#10B981" if not theme.is_dark else "#34D399"
+            self.raw_output_field.value = text
+            self.markdown_output_view.value = text
         elif item.status == "Failed":
-            self.status_badge.content.value = "ERROR"
-            self.status_badge.bgcolor = styles.STATUS_ERR_BG
-            self.status_badge.border = ft.Border.all(1, styles.STATUS_ERR_BORDER)
-            self.status_badge.content.color = styles.STATUS_ERR_TEXT
-            self.markdown_view.value = f"### ⚠️ Extraction Failed\n\n```\n{item.error_message}\n```\n\nPlease check your API key and network connection in Settings."
-            self.raw_field.value = item.error_message
-            self.copy_btn.visible = False
-            self.toggle_mode_btn.visible = False
+            self.status_label.value = "Error"
+            self.status_label.color = "#EF4444" if not theme.is_dark else "#F87171"
+            err_msg = "Couldn't read this image. Try a sharper photo or a higher-resolution scan."
+            if item.error_message:
+                err_msg += f"\n\nDetails: {item.error_message}"
+            self.raw_output_field.value = err_msg
+            self.markdown_output_view.value = f"**Couldn't read this image. Try a sharper photo or a higher-resolution scan.**\n\n`{item.error_message}`"
         else:
-            self.status_badge.content.value = "READY"
-            self.status_badge.bgcolor = styles.STATUS_READY_BG
-            self.status_badge.border = ft.Border.all(1, styles.BORDER_COLOR)
-            self.status_badge.content.color = styles.STATUS_READY_TEXT
-            self.markdown_view.value = "Ready to transcribe. Click **PROCESS QUEUE** below to extract text from this document."
-            self.raw_field.value = ""
-            self.copy_btn.visible = False
-            self.toggle_mode_btn.visible = False
+            self.status_label.value = "Ready"
+            self.status_label.color = theme.text_secondary
+            self.raw_output_field.value = text
+            self.markdown_output_view.value = text or "*Click 'Extract text' below to begin.*"
 
         safe_update(self)
 
-def create_text_panel():
-    return TextPanel()
+    def update_theme_ui(self):
+        self.bgcolor = theme.surface
+        self.border = ft.Border.all(1, theme.border)
+        self.header_title.color = theme.text_primary
+        self.char_count_text.color = theme.text_secondary
+        self.text_canvas.bgcolor = theme.bg
+        self.text_canvas.border = ft.Border.all(1, theme.border)
+
+        self.raw_output_field.text_style.color = theme.text_primary
+        self.raw_output_field.cursor_color = theme.accent
+
+        self.copy_btn.style.bgcolor = theme.surface
+        self.copy_btn.style.side = ft.BorderSide(1, theme.border)
+        self.copy_icon.color = theme.text_primary
+        self.copy_text.color = theme.text_primary
+
+        self.view_mode_btn.style.bgcolor = theme.surface
+        self.view_mode_btn.style.side = ft.BorderSide(1, theme.border)
+        self.view_mode_icon.color = theme.text_primary
+        self.view_mode_text.color = theme.text_primary
+
+        self.export_btn.style.bgcolor = theme.surface
+        self.export_btn.style.side = ft.BorderSide(1, theme.border)
+        self.export_icon.color = theme.text_primary
+        self.export_text.color = theme.text_primary
+
+        self.extract_btn.style.bgcolor = theme.accent
+        self.extract_btn.style.side = ft.BorderSide(2, theme.accent)
+
+        self.update_text_view()
+
+def create_text_panel(on_extract_click=None):
+    return TextPanel(on_extract_click=on_extract_click)

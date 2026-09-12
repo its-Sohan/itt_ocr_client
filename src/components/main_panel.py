@@ -1,6 +1,5 @@
 import flet as ft
-from src import styles
-from src.components.sidebar import create_badge
+from src.styles import theme, RADIUS_PANEL, FONT_FAMILY_UI
 from src.components.preview_panel import create_preview_panel
 from src.components.text_panel import create_text_panel
 from src.app_state import state
@@ -12,53 +11,14 @@ def safe_update(control: ft.Control):
         pass
 
 class MainPanel(ft.Container):
-    def __init__(self):
-        super().__init__(
-            expand=True,
-            bgcolor=styles.BG_PANEL,
-            border=ft.Border.all(1, styles.BORDER_COLOR),
-            border_radius=12,
-            padding=20,
-        )
-        self.page_badge = ft.Container(
-            content=ft.Text("PAGE 0 OF 0", size=10, weight=ft.FontWeight.BOLD, color=styles.TEXT_SECONDARY),
-            bgcolor=styles.BG_SUBTLE,
-            border=ft.Border.all(1, styles.BORDER_COLOR),
-            border_radius=4,
-            padding=ft.Padding.symmetric(horizontal=8, vertical=3),
-        )
-        self.preview_panel = create_preview_panel()
-        self.text_panel = create_text_panel()
+    def __init__(self, on_scan_click=None, on_extract_click=None):
+        self.preview_panel = create_preview_panel(on_scan_click=on_scan_click)
+        self.text_panel = create_text_panel(on_extract_click=on_extract_click)
 
-        header = ft.Row(
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            controls=[
-                ft.Column(
-                    spacing=2,
-                    controls=[
-                        ft.Row(
-                            spacing=8,
-                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                            controls=[
-                                ft.Container(width=6, height=6, border_radius=3, bgcolor=styles.TEXT_PRIMARY),
-                                ft.Text("WORKSPACE — TRANSCRIPTION STUDIO", size=11, weight=ft.FontWeight.BOLD, color=styles.TEXT_PRIMARY),
-                            ],
-                        ),
-                        ft.Text(
-                            "High-precision document extraction engine with real-time markdown transcription and syntax review.",
-                            size=12,
-                            color=styles.TEXT_SECONDARY,
-                        ),
-                    ],
-                ),
-                self.page_badge,
-            ],
-        )
-
-        workspace = ft.Row(
+        # Workspace container holding Document Canvas & Extracted Text
+        self.workspace_layout = ft.Row(
             expand=True,
-            spacing=20,
+            spacing=16,
             alignment=ft.MainAxisAlignment.START,
             vertical_alignment=ft.CrossAxisAlignment.STRETCH,
             controls=[
@@ -67,28 +27,34 @@ class MainPanel(ft.Container):
             ],
         )
 
-        self.content = ft.Column(
+        super().__init__(
             expand=True,
-            spacing=20,
-            controls=[
-                header,
-                workspace,
-            ],
+            bgcolor="transparent",
+            content=self.workspace_layout,
         )
 
-        state.add_listener(self.update_header)
-        self.update_header()
+        theme.add_listener(self.update_theme_ui)
 
-    def update_header(self):
-        total = len(state.queue)
-        current_idx = 0
-        if state.selected_item and total > 0:
-            try:
-                current_idx = state.queue.index(state.selected_item) + 1
-            except ValueError:
-                current_idx = 1
-        self.page_badge.content.value = f"PAGE {current_idx} OF {total}"
+    def set_stacked(self, stacked: bool):
+        if stacked:
+            self.workspace_layout.vertical_alignment = ft.CrossAxisAlignment.START
+            # Switch controls to vertical column orientation if screen is narrow
+            self.content = ft.Column(
+                expand=True,
+                spacing=16,
+                scroll=ft.ScrollMode.AUTO,
+                controls=[
+                    ft.Container(content=self.preview_panel, height=360),
+                    ft.Container(content=self.text_panel, height=440),
+                ],
+            )
+        else:
+            self.workspace_layout.controls = [self.preview_panel, self.text_panel]
+            self.content = self.workspace_layout
         safe_update(self)
 
-def create_main_panel():
-    return MainPanel()
+    def update_theme_ui(self):
+        safe_update(self)
+
+def create_main_panel(on_scan_click=None, on_extract_click=None):
+    return MainPanel(on_scan_click=on_scan_click, on_extract_click=on_extract_click)
