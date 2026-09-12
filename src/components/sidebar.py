@@ -73,31 +73,35 @@ class Sidebar(ft.Container):
             content=ft.Row(
                 spacing=6,
                 alignment=ft.MainAxisAlignment.CENTER,
+                tight=True,
                 controls=[self.browse_icon, self.browse_text],
             ),
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
                 side=ft.BorderSide(1, theme.border),
-                padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+                padding=ft.Padding.symmetric(horizontal=8, vertical=8),
                 bgcolor=theme.surface,
             ),
+            expand=True,
             on_click=self.on_browse_click,
         )
 
-        self.scan_icon = ft.Icon(ft.Icons.DOCUMENT_SCANNER_OUTLINED, size=14, color=theme.text_primary)
+        self.scan_icon = ft.Icon(ft.Icons.DOCUMENT_SCANNER_ROUNDED, size=14, color=theme.text_primary)
         self.scan_text = ft.Text("Scan document", size=12, weight=ft.FontWeight.W_500, color=theme.text_primary)
         self.scan_btn = ft.OutlinedButton(
             content=ft.Row(
                 spacing=6,
                 alignment=ft.MainAxisAlignment.CENTER,
+                tight=True,
                 controls=[self.scan_icon, self.scan_text],
             ),
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
                 side=ft.BorderSide(1, theme.border),
-                padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+                padding=ft.Padding.symmetric(horizontal=8, vertical=8),
                 bgcolor=theme.surface,
             ),
+            expand=True,
             on_click=self.on_scan_click,
         )
 
@@ -105,7 +109,7 @@ class Sidebar(ft.Container):
             bgcolor=theme.bg,
             border=ft.Border.all(1, theme.border),
             border_radius=RADIUS_PANEL,
-            padding=14,
+            padding=12,
             content=ft.Column(
                 spacing=10,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,

@@ -1,6 +1,5 @@
 import flet as ft
 from src.styles import theme, RADIUS_GLASS, RADIUS_PANEL, FONT_FAMILY_UI
-from src.config_store import load_config
 
 def safe_update(control: ft.Control):
     try:
@@ -35,24 +34,6 @@ class TopBar(ft.Container):
             weight=ft.FontWeight.W_600,
             color=theme.text_primary,
             font_family=FONT_FAMILY_UI,
-        )
-
-        config = load_config()
-        model_name = config.get("model_name", "gpt-4o-mini")
-        self.model_badge_text = ft.Text(
-            model_name,
-            size=12,
-            weight=ft.FontWeight.W_500,
-            color=theme.text_secondary,
-            font_family=FONT_FAMILY_UI,
-        )
-        self.model_badge = ft.Container(
-            content=self.model_badge_text,
-            bgcolor=theme.surface,
-            border=ft.Border.all(1, theme.border),
-            border_radius=8,
-            padding=ft.Padding.symmetric(horizontal=10, vertical=4),
-            tooltip="Active Vision Engine",
         )
 
         # Command Palette button
@@ -132,7 +113,7 @@ class TopBar(ft.Container):
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
-                # Left cluster: Logo and model
+                # Left cluster: History toggle and Logo
                 ft.Row(
                     spacing=10,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -140,7 +121,6 @@ class TopBar(ft.Container):
                         self.history_btn,
                         self.app_icon,
                         self.brand_text,
-                        self.model_badge,
                     ],
                 ),
                 # Center: Command palette shortcut
@@ -166,7 +146,7 @@ class TopBar(ft.Container):
             border_radius=RADIUS_GLASS,
             shadow=theme.glass_shadow,
             padding=ft.Padding.symmetric(horizontal=16, vertical=8),
-            margin=ft.Margin(left=16, top=14, right=16, bottom=8),
+            margin=None,
             height=54,
         )
 
@@ -181,10 +161,6 @@ class TopBar(ft.Container):
         self.shadow = theme.glass_shadow
         self.brand_text.color = theme.text_primary
         self.app_icon.src = "assets/app_icon_dark.svg" if theme.is_dark else "assets/app_icon.svg"
-        
-        self.model_badge.bgcolor = theme.surface
-        self.model_badge.border = ft.Border.all(1, theme.border)
-        self.model_badge_text.color = theme.text_secondary
 
         self.cmd_palette_btn.bgcolor = theme.surface
         self.cmd_palette_btn.border = ft.Border.all(1, theme.border)
@@ -199,9 +175,6 @@ class TopBar(ft.Container):
         self.settings_btn.icon_color = theme.text_secondary
         self.theme_btn.icon = ft.Icons.DARK_MODE_OUTLINED if not theme.is_dark else ft.Icons.LIGHT_MODE_OUTLINED
         self.theme_btn.icon_color = theme.text_secondary
-
-        config = load_config()
-        self.model_badge_text.value = config.get("model_name", "gpt-4o-mini")
 
         safe_update(self)
 

@@ -22,6 +22,8 @@ def main(page: ft.Page):
     page.fonts = {
         "Inter": "assets/fonts/Inter-Regular.ttf",
         "JetBrains Mono": "assets/fonts/JetBrainsMono-Regular.ttf",
+        "Noto Sans Bengali": "assets/fonts/NotoSansBengali-Regular.ttf",
+        "Kalpurush": "assets/fonts/kalpurush.ttf",
     }
     page.theme = ft.Theme(font_family=FONT_FAMILY_UI)
 
@@ -134,12 +136,12 @@ def main(page: ft.Page):
             page.show_dialog(
                 ft.SnackBar(
                     content=ft.Text(
-                        "Couldn't read this image. Try a sharper photo or a higher-resolution scan.",
+                        f"Extraction failed: {str(ex)[:120]}",
                         size=13,
                         color="#FFFFFF",
                     ),
                     bgcolor="#EF4444",
-                    duration=4000,
+                    duration=5000,
                 )
             )
         finally:
@@ -197,10 +199,10 @@ def main(page: ft.Page):
     app_container = ft.Container(
         expand=True,
         bgcolor=theme.bg,
-        padding=ft.Padding.only(left=16, right=16, bottom=16),
+        padding=ft.Padding.only(left=16, top=14, right=16, bottom=16),
         content=ft.Column(
             expand=True,
-            spacing=10,
+            spacing=12,
             controls=[
                 top_bar_comp,
                 workspace_row,

@@ -1,5 +1,12 @@
 import flet as ft
-from src.styles import theme, RADIUS_PANEL, FONT_FAMILY_UI, FONT_FAMILY_MONO
+from src.styles import (
+    theme,
+    RADIUS_PANEL,
+    FONT_FAMILY_UI,
+    FONT_FAMILY_MONO,
+    FONT_FAMILY_BENGALI,
+    contains_bengali,
+)
 from src.app_state import state
 
 def safe_update(control: ft.Control):
@@ -8,10 +15,106 @@ def safe_update(control: ft.Control):
     except Exception:
         pass
 
+class ParagraphBlock(ft.Container):
+    def __init__(self, text: str, on_copy):
+        self.block_text = text
+        self.on_copy = on_copy
+
+        is_bengali = contains_bengali(self.block_text)
+
+        self.copy_icon = ft.Icon(
+            ft.Icons.CONTENT_COPY_ROUNDED,
+            size=12,
+            color=theme.text_secondary,
+        )
+        self.copy_label = ft.Text(
+            "Copy",
+            size=11,
+            weight=ft.FontWeight.W_500,
+            color=theme.text_secondary,
+            font_family=FONT_FAMILY_UI,
+        )
+        self.copy_badge = ft.Container(
+            content=ft.Row(
+                spacing=4,
+                tight=True,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    self.copy_icon,
+                    self.copy_label,
+                ],
+            ),
+            bgcolor=theme.surface,
+            border=ft.Border.all(1, theme.border),
+            border_radius=4,
+            padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+            opacity=0.0,
+            animate_opacity=150,
+            ink=True,
+            on_click=self._handle_copy_click,
+            tooltip="Copy block",
+        )
+
+        self.text_content = ft.Text(
+            self.block_text,
+            size=14 if is_bengali else 13,
+            font_family=FONT_FAMILY_BENGALI if is_bengali else FONT_FAMILY_MONO,
+            color=theme.text_primary,
+            selectable=True,
+            expand=True,
+        )
+
+        super().__init__(
+            bgcolor=theme.surface,
+            border=ft.Border.all(1, theme.border),
+            border_radius=RADIUS_PANEL,
+            padding=ft.Padding.symmetric(horizontal=12, vertical=10),
+            on_hover=self._on_hover,
+            content=ft.Row(
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.START,
+                spacing=10,
+                controls=[
+                    self.text_content,
+                    self.copy_badge,
+                ],
+            ),
+        )
+
+    def _handle_copy_click(self, e):
+        self.copy_icon.name = ft.Icons.CHECK_ROUNDED
+        self.copy_icon.color = "#10B981" if not theme.is_dark else "#34D399"
+        self.copy_label.value = "Copied"
+        self.copy_label.color = "#10B981" if not theme.is_dark else "#34D399"
+        safe_update(self)
+        self.on_copy(self.block_text)
+
+    def _on_hover(self, e: ft.HoverEvent):
+        is_hovered = (e.data == "true")
+        self.copy_badge.opacity = 1.0 if is_hovered else 0.0
+        if not is_hovered:
+            self.copy_icon.name = ft.Icons.CONTENT_COPY_ROUNDED
+            self.copy_icon.color = theme.text_secondary
+            self.copy_label.value = "Copy"
+            self.copy_label.color = theme.text_secondary
+        self.border = ft.Border.all(1, theme.accent if is_hovered else theme.border)
+        safe_update(self)
+
+    def update_theme(self):
+        self.bgcolor = theme.surface
+        self.border = ft.Border.all(1, theme.border)
+        self.text_content.color = theme.text_primary
+        self.copy_badge.bgcolor = theme.surface
+        self.copy_badge.border = ft.Border.all(1, theme.border)
+        self.copy_icon.color = theme.text_secondary
+        self.copy_label.color = theme.text_secondary
+        safe_update(self)
+
 class TextPanel(ft.Container):
     def __init__(self, on_extract_click=None):
         self.on_extract_click = on_extract_click
-        self.is_raw_mode = True
+        # View modes: "blocks", "raw", "markdown"
+        self.view_mode = "blocks"
 
         # Header labels
         self.header_title = ft.Text(
@@ -37,7 +140,14 @@ class TextPanel(ft.Container):
             font_family=FONT_FAMILY_UI,
         )
 
-        # Monospace Raw Output Field
+        # 1. Blocks View: paragraph-by-paragraph with hover-copy button
+        self.blocks_column = ft.Column(
+            spacing=8,
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
+        )
+
+        # 2. Raw Monospace Editor View
         self.raw_output_field = ft.TextField(
             value="",
             read_only=False,
@@ -57,7 +167,7 @@ class TextPanel(ft.Container):
             on_change=self._on_text_edited,
         )
 
-        # Formatted Markdown View
+        # 3. Formatted Markdown View
         self.markdown_output_view = ft.Markdown(
             value="*No text extracted yet.*",
             selectable=True,
@@ -65,18 +175,19 @@ class TextPanel(ft.Container):
             soft_line_break=True,
         )
 
-        # Flat, high-contrast text canvas (uses theme.bg for clean inner inset)
+        # Central Text Canvas holding current view mode
         self.text_canvas = ft.Container(
             expand=True,
             bgcolor=theme.bg,
             border=ft.Border.all(1, theme.border),
             border_radius=RADIUS_PANEL,
-            content=self.raw_output_field,
+            padding=8,
+            content=self.blocks_column,
         )
 
-        # Copy button (Toast 'Copied')
+        # Copy Entire Document button
         self.copy_icon = ft.Icon(ft.Icons.CONTENT_COPY_ROUNDED, size=14, color=theme.text_primary)
-        self.copy_text = ft.Text("Copy", size=12, weight=ft.FontWeight.W_500, color=theme.text_primary, font_family=FONT_FAMILY_UI)
+        self.copy_text = ft.Text("Copy all", size=12, weight=ft.FontWeight.W_500, color=theme.text_primary, font_family=FONT_FAMILY_UI)
         self.copy_btn = ft.OutlinedButton(
             content=ft.Row(
                 spacing=6,
@@ -88,26 +199,28 @@ class TextPanel(ft.Container):
                 padding=ft.Padding.symmetric(horizontal=12, vertical=6),
                 bgcolor=theme.surface,
             ),
-            on_click=self.on_copy_click,
-            tooltip="Copy text to clipboard",
+            on_click=self.on_copy_all_click,
+            tooltip="Copy entire extracted text to clipboard",
         )
 
-        # View Mode toggle button
-        self.view_mode_icon = ft.Icon(ft.Icons.TEXT_SNIPPET_OUTLINED, size=14, color=theme.text_primary)
-        self.view_mode_text = ft.Text("Preview", size=12, weight=ft.FontWeight.W_500, color=theme.text_primary, font_family=FONT_FAMILY_UI)
+        # View Mode Toggle Segment: Blocks / Raw / Markdown
+        self.mode_label = ft.Text("View: Blocks", size=12, weight=ft.FontWeight.W_500, color=theme.text_primary, font_family=FONT_FAMILY_UI)
         self.view_mode_btn = ft.OutlinedButton(
             content=ft.Row(
                 spacing=6,
-                controls=[self.view_mode_icon, self.view_mode_text],
+                controls=[
+                    ft.Icon(ft.Icons.VIEW_AGENDA_OUTLINED, size=14, color=theme.text_primary),
+                    self.mode_label,
+                ],
             ),
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
                 side=ft.BorderSide(1, theme.border),
-                padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+                padding=ft.Padding.symmetric(horizontal=10, vertical=6),
                 bgcolor=theme.surface,
             ),
-            on_click=self.toggle_mode,
-            tooltip="Switch between raw monospace and preview",
+            on_click=self.cycle_view_mode,
+            tooltip="Cycle view mode: Paragraph Blocks, Raw Monospace, Markdown Preview",
         )
 
         # Export button
@@ -125,7 +238,7 @@ class TextPanel(ft.Container):
                 bgcolor=theme.surface,
             ),
             on_click=self.on_export_click,
-            tooltip="Export extracted text",
+            tooltip="Export extracted text to file",
         )
 
         # Primary Action Button: 'Extract text'
@@ -214,14 +327,42 @@ class TextPanel(ft.Container):
             item.extracted_text = self.raw_output_field.value
             self.markdown_output_view.value = item.extracted_text
             self.char_count_text.value = f"{len(item.extracted_text):,} characters"
+            is_bengali = contains_bengali(item.extracted_text)
+            self.raw_output_field.text_style.font_family = FONT_FAMILY_BENGALI if is_bengali else FONT_FAMILY_MONO
+            self.raw_output_field.text_size = 14 if is_bengali else 13
+            # Rebuild blocks from edited text
+            self._rebuild_blocks(item.extracted_text)
 
-    def toggle_mode(self, e):
-        self.is_raw_mode = not self.is_raw_mode
-        self.view_mode_text.value = "Preview" if self.is_raw_mode else "Raw (Mono)"
-        self.text_canvas.content = self.raw_output_field if self.is_raw_mode else self.markdown_output_view
+    def cycle_view_mode(self, e):
+        if self.view_mode == "blocks":
+            self.view_mode = "raw"
+            self.mode_label.value = "View: Raw"
+            self.text_canvas.content = self.raw_output_field
+        elif self.view_mode == "raw":
+            self.view_mode = "markdown"
+            self.mode_label.value = "View: Markdown"
+            self.text_canvas.content = self.markdown_output_view
+        else:
+            self.view_mode = "blocks"
+            self.mode_label.value = "View: Blocks"
+            self.text_canvas.content = self.blocks_column
         safe_update(self)
 
-    def on_copy_click(self, e):
+    def on_copy_block(self, block_text: str):
+        if block_text and self.page:
+            try:
+                self.page.set_clipboard(block_text)
+                self.page.show_dialog(
+                    ft.SnackBar(
+                        content=ft.Text("Copied paragraph", size=13, weight=ft.FontWeight.W_500, color=theme.text_primary),
+                        bgcolor=theme.glass_bg,
+                        duration=1500,
+                    )
+                )
+            except Exception:
+                pass
+
+    def on_copy_all_click(self, e):
         item = state.selected_item
         text_to_copy = self.raw_output_field.value or (item.extracted_text if item else "")
         if text_to_copy and self.page:
@@ -236,6 +377,35 @@ class TextPanel(ft.Container):
                 )
             except Exception:
                 pass
+
+    def _rebuild_blocks(self, text: str):
+        self.blocks_column.controls.clear()
+        if not text:
+            self.blocks_column.controls.append(
+                ft.Container(
+                    padding=20,
+                    alignment=ft.Alignment.CENTER,
+                    content=ft.Text(
+                        "No paragraphs extracted yet.",
+                        size=13,
+                        color=theme.text_secondary,
+                        font_family=FONT_FAMILY_UI,
+                    ),
+                )
+            )
+            return
+
+        # Split into paragraphs by double newlines or single newlines
+        raw_blocks = [b.strip() for b in text.split("\n\n") if b.strip()]
+        if not raw_blocks:
+            raw_blocks = [b.strip() for b in text.split("\n") if b.strip()]
+        if not raw_blocks:
+            raw_blocks = [text.strip()]
+
+        for block in raw_blocks:
+            self.blocks_column.controls.append(
+                ParagraphBlock(block, on_copy=self.on_copy_block)
+            )
 
     def on_export_click(self, e):
         item = state.selected_item
@@ -302,22 +472,28 @@ class TextPanel(ft.Container):
             self.status_label.color = theme.text_secondary
             self.raw_output_field.value = ""
             self.markdown_output_view.value = "*Drop an image or PDF here to extract its text.*"
+            self._rebuild_blocks("")
             safe_update(self)
             return
 
         text = item.extracted_text or ""
         self.char_count_text.value = f"{len(text):,} characters"
+        is_bengali = contains_bengali(text)
+        self.raw_output_field.text_style.font_family = FONT_FAMILY_BENGALI if is_bengali else FONT_FAMILY_MONO
+        self.raw_output_field.text_size = 14 if is_bengali else 13
 
         if item.status == "Processing":
             self.status_label.value = "Extracting text"
             self.status_label.color = theme.accent
             self.raw_output_field.value = "Extracting document text with vision model..."
             self.markdown_output_view.value = "*Extracting document text with vision model...*"
+            self._rebuild_blocks("Extracting document text with vision model...")
         elif item.status == "Done":
             self.status_label.value = "Done"
             self.status_label.color = "#10B981" if not theme.is_dark else "#34D399"
             self.raw_output_field.value = text
             self.markdown_output_view.value = text
+            self._rebuild_blocks(text)
         elif item.status == "Failed":
             self.status_label.value = "Error"
             self.status_label.color = "#EF4444" if not theme.is_dark else "#F87171"
@@ -326,11 +502,13 @@ class TextPanel(ft.Container):
                 err_msg += f"\n\nDetails: {item.error_message}"
             self.raw_output_field.value = err_msg
             self.markdown_output_view.value = f"**Couldn't read this image. Try a sharper photo or a higher-resolution scan.**\n\n`{item.error_message}`"
+            self._rebuild_blocks(err_msg)
         else:
             self.status_label.value = "Ready"
             self.status_label.color = theme.text_secondary
             self.raw_output_field.value = text
             self.markdown_output_view.value = text or "*Click 'Extract text' below to begin.*"
+            self._rebuild_blocks(text)
 
         safe_update(self)
 
@@ -352,8 +530,7 @@ class TextPanel(ft.Container):
 
         self.view_mode_btn.style.bgcolor = theme.surface
         self.view_mode_btn.style.side = ft.BorderSide(1, theme.border)
-        self.view_mode_icon.color = theme.text_primary
-        self.view_mode_text.color = theme.text_primary
+        self.mode_label.color = theme.text_primary
 
         self.export_btn.style.bgcolor = theme.surface
         self.export_btn.style.side = ft.BorderSide(1, theme.border)
@@ -362,6 +539,10 @@ class TextPanel(ft.Container):
 
         self.extract_btn.style.bgcolor = theme.accent
         self.extract_btn.style.side = ft.BorderSide(2, theme.accent)
+
+        for block_ctrl in self.blocks_column.controls:
+            if isinstance(block_ctrl, ParagraphBlock):
+                block_ctrl.update_theme()
 
         self.update_text_view()
 

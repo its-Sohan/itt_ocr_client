@@ -1,7 +1,8 @@
 import os
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, asdict
 from typing import List, Optional, Callable
+from src.config_store import load_history, save_history
 
 @dataclass
 class QueueItem:
@@ -13,6 +14,22 @@ class QueueItem:
     extracted_text: str = ""
     error_message: str = ""
     source: str = "upload"  # "upload" or "scanner"
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "QueueItem":
+        return cls(
+            id=data.get("id", str(uuid.uuid4())[:8]),
+            file_path=data.get("file_path", ""),
+            file_name=data.get("file_name", ""),
+            file_size_str=data.get("file_size_str", "Unknown"),
+            status=data.get("status", "Ready"),
+            extracted_text=data.get("extracted_text", ""),
+            error_message=data.get("error_message", ""),
+            source=data.get("source", "upload"),
+        )
 
 def format_file_size(size_bytes: int) -> str:
     if size_bytes < 1024:
@@ -30,11 +47,36 @@ class AppState:
         self.status_message: str = "Ready"
         self._listeners: List[Callable[[], None]] = []
 
+        # Load persisted history threads on startup
+        self._load_cached_history()
+
+    def _load_cached_history(self):
+        try:
+            cached_data = load_history()
+            if cached_data:
+                for item_dict in cached_data:
+                    # Validate item file path or preserve cached record
+                    item = QueueItem.from_dict(item_dict)
+                    self.queue.append(item)
+                if self.queue:
+                    self.selected_item_id = self.queue[0].id
+        except Exception as ex:
+            print(f"Error loading cached history: {ex}")
+
+    def persist(self):
+        try:
+            data = [item.to_dict() for item in self.queue]
+            save_history(data)
+        except Exception as ex:
+            print(f"Error persisting history: {ex}")
+
     def add_listener(self, listener: Callable[[], None]):
         if listener not in self._listeners:
             self._listeners.append(listener)
 
     def notify(self):
+        # Auto-persist state changes (extracted text, status)
+        self.persist()
         for listener in self._listeners:
             try:
                 listener()

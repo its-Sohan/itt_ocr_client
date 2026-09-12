@@ -40,9 +40,27 @@ RADIUS_GLASS = 18
 # Smaller radius (4-8px) on flat structural panels
 RADIUS_PANEL = 6
 
+import unicodedata
+
 # Typography tokens
 FONT_FAMILY_UI = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
 FONT_FAMILY_MONO = "'JetBrains Mono', 'IBM Plex Mono', Menlo, Consolas, monospace"
+FONT_FAMILY_BENGALI = "Kalpurush, 'Noto Sans Bengali', sans-serif"
+
+def contains_bengali(text: str) -> bool:
+    """Detects whether string contains any Bengali Unicode codepoints (U+0980 - U+09FF)."""
+    if not text:
+        return False
+    return any('\u0980' <= ch <= '\u09FF' for ch in text)
+
+def safe_bengali_normalize(text: str) -> str:
+    """
+    Applies Unicode NFC normalization to ensure complex Bengali conjuncts (যুক্তাক্ষর)
+    and vowel signs (কার) remain canonically composed without decomposition or rendering corruption.
+    """
+    if not text:
+        return ""
+    return unicodedata.normalize("NFC", text)
 
 class ThemeState:
     def __init__(self):

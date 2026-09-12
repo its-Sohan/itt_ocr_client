@@ -41,7 +41,7 @@ def load_config() -> dict:
 def save_config(config: dict):
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2)
+        json.dump(config, f, indent=2, ensure_ascii=False)
 
 def update_usage_stats(characters: int = 0, success: bool = True):
     config = load_config()
@@ -55,3 +55,24 @@ def update_usage_stats(characters: int = 0, success: bool = True):
     config["usage_stats"] = stats
     save_config(config)
     return stats
+
+HISTORY_FILE = CONFIG_DIR / "history.json"
+
+def load_history() -> list:
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    if not HISTORY_FILE.exists():
+        return []
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def save_history(items: list):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(items, f, indent=2, ensure_ascii=False)
+    except Exception as ex:
+        print(f"Failed to save history: {ex}")
+
