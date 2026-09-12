@@ -9,10 +9,19 @@ def safe_update(control: ft.Control):
         pass
 
 class Sidebar(ft.Container):
-    def __init__(self, on_browse_click=None, on_scan_click=None):
+    def __init__(
+        self,
+        on_browse_click=None,
+        on_scan_click=None,
+        on_paste_click=None,
+        on_run_all_click=None,
+    ):
         self.on_browse_click = on_browse_click
         self.on_scan_click = on_scan_click
+        self.on_paste_click = on_paste_click
+        self.on_run_all_click = on_run_all_click
         self.is_collapsed = False
+        self.search_filter = ""
 
         # Header
         self.title_text = ft.Text(
@@ -29,6 +38,14 @@ class Sidebar(ft.Container):
             weight=ft.FontWeight.W_400,
             color=theme.text_secondary,
             font_family=FONT_FAMILY_UI,
+        )
+
+        self.run_all_btn = ft.IconButton(
+            icon=ft.Icons.PLAY_CIRCLE_OUTLINE_ROUNDED,
+            icon_size=17,
+            icon_color=theme.accent,
+            tooltip="Extract all pending (batch)",
+            on_click=self.on_run_all_click,
         )
 
         self.clear_btn = ft.IconButton(
@@ -48,13 +65,19 @@ class Sidebar(ft.Container):
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     controls=[self.title_text, self.count_text],
                 ),
-                self.clear_btn,
+                ft.Row(
+                    spacing=2,
+                    controls=[
+                        self.run_all_btn,
+                        self.clear_btn,
+                    ],
+                ),
             ],
         )
 
         # Ingestion Dropzone
         self.dropzone_text = ft.Text(
-            "Drop an image or PDF here",
+            "Drop image or PDF",
             size=13,
             weight=ft.FontWeight.W_500,
             color=theme.text_primary,
@@ -67,11 +90,11 @@ class Sidebar(ft.Container):
             font_family=FONT_FAMILY_UI,
         )
 
-        self.browse_icon = ft.Icon(ft.Icons.FOLDER_OPEN_OUTLINED, size=14, color=theme.text_primary)
-        self.browse_text = ft.Text("Browse files", size=12, weight=ft.FontWeight.W_500, color=theme.text_primary)
+        self.browse_icon = ft.Icon(ft.Icons.FOLDER_OPEN_OUTLINED, size=13, color=theme.text_primary)
+        self.browse_text = ft.Text("Browse", size=11, weight=ft.FontWeight.W_500, color=theme.text_primary)
         self.browse_btn = ft.OutlinedButton(
             content=ft.Row(
-                spacing=6,
+                spacing=4,
                 alignment=ft.MainAxisAlignment.CENTER,
                 tight=True,
                 controls=[self.browse_icon, self.browse_text],
@@ -79,18 +102,19 @@ class Sidebar(ft.Container):
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
                 side=ft.BorderSide(1, theme.border),
-                padding=ft.Padding.symmetric(horizontal=8, vertical=8),
+                padding=ft.Padding.symmetric(horizontal=6, vertical=7),
                 bgcolor=theme.surface,
             ),
             expand=True,
             on_click=self.on_browse_click,
+            tooltip="Browse image files (Ctrl+O)",
         )
 
-        self.scan_icon = ft.Icon(ft.Icons.DOCUMENT_SCANNER_ROUNDED, size=14, color=theme.text_primary)
-        self.scan_text = ft.Text("Scan document", size=12, weight=ft.FontWeight.W_500, color=theme.text_primary)
+        self.scan_icon = ft.Icon(ft.Icons.DOCUMENT_SCANNER_ROUNDED, size=13, color=theme.text_primary)
+        self.scan_text = ft.Text("Scan", size=11, weight=ft.FontWeight.W_500, color=theme.text_primary)
         self.scan_btn = ft.OutlinedButton(
             content=ft.Row(
-                spacing=6,
+                spacing=4,
                 alignment=ft.MainAxisAlignment.CENTER,
                 tight=True,
                 controls=[self.scan_icon, self.scan_text],
@@ -98,11 +122,32 @@ class Sidebar(ft.Container):
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
                 side=ft.BorderSide(1, theme.border),
-                padding=ft.Padding.symmetric(horizontal=8, vertical=8),
+                padding=ft.Padding.symmetric(horizontal=6, vertical=7),
                 bgcolor=theme.surface,
             ),
             expand=True,
             on_click=self.on_scan_click,
+            tooltip="Scan from hardware device",
+        )
+
+        self.paste_icon = ft.Icon(ft.Icons.CONTENT_PASTE_ROUNDED, size=13, color=theme.text_primary)
+        self.paste_text = ft.Text("Paste", size=11, weight=ft.FontWeight.W_500, color=theme.text_primary)
+        self.paste_btn = ft.OutlinedButton(
+            content=ft.Row(
+                spacing=4,
+                alignment=ft.MainAxisAlignment.CENTER,
+                tight=True,
+                controls=[self.paste_icon, self.paste_text],
+            ),
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+                side=ft.BorderSide(1, theme.border),
+                padding=ft.Padding.symmetric(horizontal=6, vertical=7),
+                bgcolor=theme.surface,
+            ),
+            expand=True,
+            on_click=self.on_paste_click,
+            tooltip="Paste image from clipboard (Ctrl+V)",
         )
 
         self.dropzone_container = ft.Container(
@@ -120,12 +165,25 @@ class Sidebar(ft.Container):
                         controls=[self.dropzone_text, self.dropzone_subtext],
                     ),
                     ft.Row(
-                        spacing=8,
+                        spacing=6,
                         alignment=ft.MainAxisAlignment.CENTER,
-                        controls=[self.browse_btn, self.scan_btn],
+                        controls=[self.browse_btn, self.scan_btn, self.paste_btn],
                     ),
                 ],
             ),
+        )
+
+        # Search filter field
+        self.search_field = ft.TextField(
+            hint_text="Search history...",
+            hint_style=ft.TextStyle(size=12, color=theme.text_secondary, font_family=FONT_FAMILY_UI),
+            prefix_icon=ft.Icons.SEARCH_ROUNDED,
+            dense=True,
+            text_size=12,
+            border_color=theme.border,
+            focused_border_color=theme.accent,
+            content_padding=ft.Padding.symmetric(horizontal=10, vertical=6),
+            on_change=self._on_search_changed,
         )
 
         # Queue list column
@@ -136,18 +194,12 @@ class Sidebar(ft.Container):
         )
 
         self.body_content = ft.Column(
-            spacing=12,
+            spacing=10,
             expand=True,
             controls=[
                 header_row,
                 self.dropzone_container,
-                ft.Text(
-                    "Documents",
-                    size=12,
-                    weight=ft.FontWeight.W_500,
-                    color=theme.text_secondary,
-                    font_family=FONT_FAMILY_UI,
-                ),
+                self.search_field,
                 self.queue_list_column,
             ],
         )
@@ -186,6 +238,10 @@ class Sidebar(ft.Container):
             status_color = theme.text_secondary
             status_label = "Ready"
 
+        source_icon = ft.Icons.CONTENT_PASTE_ROUNDED if item.source == "clipboard" else (
+            ft.Icons.DOCUMENT_SCANNER_ROUNDED if item.source == "scanner" else ft.Icons.IMAGE_OUTLINED
+        )
+
         item_container = ft.Container(
             bgcolor=theme.bg if is_selected else theme.surface,
             border=ft.Border.all(1, theme.accent if is_selected else theme.border),
@@ -211,8 +267,10 @@ class Sidebar(ft.Container):
                                 font_family=FONT_FAMILY_UI,
                             ),
                             ft.Row(
-                                spacing=8,
+                                spacing=6,
+                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
                                 controls=[
+                                    ft.Icon(source_icon, size=11, color=theme.text_secondary),
                                     ft.Text(item.file_size_str, size=11, color=theme.text_secondary),
                                     ft.Text(status_label, size=11, weight=ft.FontWeight.W_500, color=status_color),
                                 ],
@@ -231,12 +289,28 @@ class Sidebar(ft.Container):
         )
         return item_container
 
+    def _on_search_changed(self, e):
+        self.search_filter = (e.control.value or "").strip().lower()
+        self.update_queue_ui()
+
     def update_queue_ui(self):
-        count = len(state.queue)
+        all_items = state.queue
+        count = len(all_items)
         self.count_text.value = f"{count} item{'s' if count != 1 else ''}"
 
+        # Apply search filter
+        if self.search_filter:
+            display_items = [
+                item for item in all_items
+                if self.search_filter in item.file_name.lower()
+                or self.search_filter in (item.extracted_text or "").lower()
+            ]
+        else:
+            display_items = all_items
+
         self.queue_list_column.controls.clear()
-        if not state.queue:
+        if not display_items:
+            empty_msg = "No matching documents found" if self.search_filter else "No documents in history"
             self.queue_list_column.controls.append(
                 ft.Container(
                     padding=20,
@@ -247,7 +321,7 @@ class Sidebar(ft.Container):
                         controls=[
                             ft.Icon(ft.Icons.INBOX_OUTLINED, size=20, color=theme.text_secondary),
                             ft.Text(
-                                "No documents in history",
+                                empty_msg,
                                 size=12,
                                 weight=ft.FontWeight.W_500,
                                 color=theme.text_secondary,
@@ -258,7 +332,7 @@ class Sidebar(ft.Container):
                 )
             )
         else:
-            for item in state.queue:
+            for item in display_items:
                 self.queue_list_column.controls.append(self._render_item(item))
 
         safe_update(self)
@@ -268,6 +342,7 @@ class Sidebar(ft.Container):
         self.border = ft.Border.all(1, theme.border)
         self.title_text.color = theme.text_primary
         self.count_text.color = theme.text_secondary
+        self.run_all_btn.icon_color = theme.accent
         self.clear_btn.icon_color = theme.text_secondary
         self.dropzone_text.color = theme.text_primary
         self.dropzone_subtext.color = theme.text_secondary
@@ -284,7 +359,26 @@ class Sidebar(ft.Container):
         self.scan_icon.color = theme.text_primary
         self.scan_text.color = theme.text_primary
 
+        self.paste_btn.style.bgcolor = theme.surface
+        self.paste_btn.style.side = ft.BorderSide(1, theme.border)
+        self.paste_icon.color = theme.text_primary
+        self.paste_text.color = theme.text_primary
+
+        self.search_field.border_color = theme.border
+        self.search_field.focused_border_color = theme.accent
+        self.search_field.hint_style.color = theme.text_secondary
+
         self.update_queue_ui()
 
-def create_sidebar(on_browse_click=None, on_scan_click=None):
-    return Sidebar(on_browse_click=on_browse_click, on_scan_click=on_scan_click)
+def create_sidebar(
+    on_browse_click=None,
+    on_scan_click=None,
+    on_paste_click=None,
+    on_run_all_click=None,
+):
+    return Sidebar(
+        on_browse_click=on_browse_click,
+        on_scan_click=on_scan_click,
+        on_paste_click=on_paste_click,
+        on_run_all_click=on_run_all_click,
+    )

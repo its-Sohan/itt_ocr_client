@@ -3,6 +3,7 @@ import os
 import flet as ft
 from src.styles import theme, FONT_FAMILY_UI, RADIUS_GLASS, RADIUS_PANEL
 from src.app_state import state
+from src.config_store import load_config
 from src.components.top_bar import create_top_bar
 from src.components.sidebar import create_sidebar
 from src.components.main_panel import create_main_panel
@@ -11,6 +12,7 @@ from src.components.dashboard_modal import create_dashboard_modal
 from src.components.command_palette import create_command_palette
 from src.services.scanner import scan_document
 from src.services.ocr_llm import extract_text_with_llm
+from src.services.clipboard import get_clipboard_image
 
 def main(page: ft.Page):
     page.title = "ITT OCR"
@@ -50,6 +52,8 @@ def main(page: ft.Page):
             page,
             on_browse_files=on_browse_files,
             on_scan_device=on_scan_device,
+            on_paste_image=lambda ev: on_paste_action(ev, show_feedback_on_empty=True),
+            on_run_all_pending=on_run_all_pending,
             on_extract_text=on_extract_click,
             on_open_settings=open_settings,
             on_open_dashboard=open_dashboard,
@@ -65,10 +69,19 @@ def main(page: ft.Page):
                 allow_multiple=True,
             )
             if files:
+                added_items = []
                 for f in files:
                     if f.path:
-                        state.add_item(f.path, source="upload")
+                        it = state.add_item(f.path, source="upload")
+                        if it:
+                            added_items.append(it)
                 page.update()
+
+                cfg = load_config()
+                if cfg.get("auto_extract", True) and added_items:
+                    for it in added_items:
+                        state.select_item(it.id)
+                        await extract_item_async(it)
         except Exception as ex:
             page.show_dialog(
                 ft.SnackBar(
@@ -205,7 +218,7 @@ def main(page: ft.Page):
         try:
             status, result = scan_document()
             if status == "SUCCESS" and result and os.path.exists(result):
-                state.add_item(result, source="scanner")
+                new_item = state.add_item(result, source="scanner")
                 page.show_dialog(
                     ft.SnackBar(
                         content=ft.Text(f"Added scanned document: {os.path.basename(result)}", color=theme.text_primary),
@@ -213,6 +226,11 @@ def main(page: ft.Page):
                         duration=2500,
                     )
                 )
+                cfg = load_config()
+                if cfg.get("auto_extract", True) and new_item:
+                    page.run_task(extract_item_async, new_item)
+                else:
+                    page.update()
             elif status == "CANCELLED":
                 page.show_dialog(
                     ft.SnackBar(
@@ -276,6 +294,72 @@ def main(page: ft.Page):
             return
         page.run_task(extract_item_async, item)
 
+    # Batch extraction for all pending items
+    async def run_all_pending_async():
+        pending_items = [
+            item for item in state.queue
+            if item.status in ("Ready", "Failed")
+        ]
+        if not pending_items:
+            page.show_dialog(
+                ft.SnackBar(
+                    content=ft.Text("No pending documents to extract.", color=theme.text_secondary),
+                    bgcolor=theme.glass_bg,
+                    duration=2000,
+                )
+            )
+            return
+
+        total = len(pending_items)
+        page.show_dialog(
+            ft.SnackBar(
+                content=ft.Text(f"Starting batch extraction for {total} document{'s' if total != 1 else ''}...", color=theme.text_primary),
+                bgcolor=theme.glass_bg,
+                duration=2500,
+            )
+        )
+
+        for item in pending_items:
+            state.select_item(item.id)
+            await extract_item_async(item)
+
+        page.show_dialog(
+            ft.SnackBar(
+                content=ft.Text(f"Batch extraction complete ({total} processed)", color=theme.text_primary),
+                bgcolor=theme.glass_bg,
+                duration=3000,
+            )
+        )
+
+    def on_run_all_pending(e=None):
+        page.run_task(run_all_pending_async)
+
+    # Clipboard paste action
+    def on_paste_action(e=None, show_feedback_on_empty=True):
+        img_path = get_clipboard_image()
+        if img_path and os.path.exists(img_path):
+            new_item = state.add_item(img_path, source="clipboard")
+            page.show_dialog(
+                ft.SnackBar(
+                    content=ft.Text(f"Pasted image: {os.path.basename(img_path)}", color=theme.text_primary),
+                    bgcolor=theme.glass_bg,
+                    duration=2000,
+                )
+            )
+            cfg = load_config()
+            if cfg.get("auto_extract", True) and new_item:
+                page.run_task(extract_item_async, new_item)
+            else:
+                page.update()
+        elif show_feedback_on_empty:
+            page.show_dialog(
+                ft.SnackBar(
+                    content=ft.Text("Clipboard does not contain an image.", color=theme.text_secondary),
+                    bgcolor=theme.glass_bg,
+                    duration=2500,
+                )
+            )
+
     # Toggle history rail
     def toggle_history(e=None):
         sidebar_comp.toggle_collapse()
@@ -291,6 +375,8 @@ def main(page: ft.Page):
     sidebar_comp = create_sidebar(
         on_browse_click=on_browse_files,
         on_scan_click=on_scan_device,
+        on_paste_click=lambda e: on_paste_action(e, show_feedback_on_empty=True),
+        on_run_all_click=on_run_all_pending,
     )
 
     main_panel_comp = create_main_panel(
@@ -347,7 +433,7 @@ def main(page: ft.Page):
 
     page.on_resized = on_page_resize
 
-    # Global keyboard shortcuts: Ctrl+K / Cmd+K, Ctrl+Enter, Ctrl+O
+    # Global keyboard shortcuts: Ctrl+K / Cmd+K, Ctrl+Enter, Ctrl+O, Ctrl+V
     def on_keyboard(e: ft.KeyboardEvent):
         if e.key.lower() == "k" and (e.ctrl or e.meta):
             open_command_palette()
@@ -355,6 +441,8 @@ def main(page: ft.Page):
             on_extract_click(None)
         elif e.key.lower() == "o" and (e.ctrl or e.meta):
             on_browse_files(None)
+        elif e.key.lower() == "v" and (e.ctrl or e.meta):
+            on_paste_action(None, show_feedback_on_empty=False)
 
     page.on_keyboard_event = on_keyboard
 

@@ -6,6 +6,8 @@ def create_command_palette(
     page: ft.Page,
     on_browse_files=None,
     on_scan_device=None,
+    on_paste_image=None,
+    on_run_all_pending=None,
     on_extract_text=None,
     on_open_settings=None,
     on_open_dashboard=None,
@@ -25,13 +27,25 @@ def create_command_palette(
         {
             "icon": ft.Icons.PLAY_ARROW_ROUNDED,
             "title": "Extract text",
-            "desc": "Run vision model OCR extraction on current document",
+            "desc": "Run vision model OCR extraction on current document (Ctrl+Enter)",
             "action": lambda: (page.pop_dialog(), on_extract_text(None) if on_extract_text else None),
+        },
+        {
+            "icon": ft.Icons.CONTENT_PASTE_ROUNDED,
+            "title": "Paste image from clipboard",
+            "desc": "Ingest screenshot or image from clipboard (Ctrl+V)",
+            "action": lambda: (page.pop_dialog(), on_paste_image(None) if on_paste_image else None),
+        },
+        {
+            "icon": ft.Icons.PLAY_CIRCLE_OUTLINE_ROUNDED,
+            "title": "Run all pending",
+            "desc": "Batch extract OCR text for all pending queue items",
+            "action": lambda: (page.pop_dialog(), on_run_all_pending(None) if on_run_all_pending else None),
         },
         {
             "icon": ft.Icons.FOLDER_OPEN_OUTLINED,
             "title": "Browse files",
-            "desc": "Open file picker to select image or document",
+            "desc": "Open file picker to select image or document (Ctrl+O)",
             "action": lambda: (page.pop_dialog(), on_browse_files(None) if on_browse_files else None),
         },
         {

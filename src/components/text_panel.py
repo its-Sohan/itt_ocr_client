@@ -9,11 +9,50 @@ from src.styles import (
 )
 from src.app_state import state
 
+import os
+import time
+
 def safe_update(control: ft.Control):
     try:
         control.update()
     except Exception:
         pass
+
+def get_export_dir() -> str:
+    desktop = os.path.expanduser("~/Desktop")
+    if os.path.isdir(desktop):
+        return desktop
+    docs = os.path.expanduser("~/Documents")
+    if os.path.isdir(docs):
+        return docs
+    return os.path.expanduser("~")
+
+def text_to_csv_string(text: str) -> str:
+    import csv
+    import io
+    output = io.StringIO()
+    writer = csv.writer(output, lineterminator="\n")
+    lines = text.strip().splitlines()
+    table_lines = [l.strip() for l in lines if l.strip().startswith("|") and l.strip().endswith("|")]
+    if table_lines:
+        for line in table_lines:
+            inner = line.strip("|")
+            cells = [c.strip() for c in inner.split("|")]
+            if all(set(c).issubset({"-", ":", " "}) for c in cells if c):
+                continue
+            writer.writerow(cells)
+    else:
+        for line in lines:
+            line_str = line.strip()
+            if not line_str:
+                continue
+            if "\t" in line_str:
+                writer.writerow([c.strip() for c in line_str.split("\t")])
+            elif "," in line_str:
+                writer.writerow([c.strip() for c in line_str.split(",")])
+            else:
+                writer.writerow([line_str])
+    return output.getvalue()
 
 class ParagraphBlock(ft.Container):
     def __init__(self, text: str, on_copy):
@@ -410,21 +449,31 @@ class TextPanel(ft.Container):
     def on_export_click(self, e):
         item = state.selected_item
         text_content = self.raw_output_field.value or (item.extracted_text if item else "")
-        if not text_content:
+        if not text_content and not any(it.extracted_text for it in state.queue):
+            if self.page:
+                self.page.show_dialog(
+                    ft.SnackBar(content=ft.Text("No extracted text to export.", color=theme.text_primary), bgcolor=theme.glass_bg)
+                )
             return
 
-        def save_file(ext: str):
-            import os
-            fname = f"{os.path.splitext(item.file_name)[0] if item else 'extracted_text'}.{ext}"
-            export_path = os.path.expanduser(f"~/{fname}")
+        def save_file(ext: str, content: str, filename_override: str = None):
+            target_dir = get_export_dir()
+            if filename_override:
+                fname = filename_override
+            else:
+                base = os.path.splitext(item.file_name)[0] if item else "extracted_text"
+                fname = f"{base}.{ext}"
+            export_path = os.path.join(target_dir, fname)
             try:
                 with open(export_path, "w", encoding="utf-8") as f:
-                    f.write(text_content)
+                    f.write(content)
                 self.page.pop_dialog()
+                folder_name = os.path.basename(target_dir) or target_dir
                 self.page.show_dialog(
                     ft.SnackBar(
-                        content=ft.Text(f"Saved {fname} to home folder", size=13, color=theme.text_primary),
+                        content=ft.Text(f"Saved {fname} to {folder_name}", size=13, color=theme.text_primary),
                         bgcolor=theme.glass_bg,
+                        duration=3000,
                     )
                 )
             except Exception as ex:
@@ -432,23 +481,70 @@ class TextPanel(ft.Container):
                     ft.SnackBar(content=ft.Text(f"Export failed: {str(ex)}"), bgcolor="#EF4444")
                 )
 
+        def export_merged(ext: str):
+            completed = [it for it in state.queue if it.extracted_text and it.extracted_text.strip()]
+            if not completed:
+                self.page.show_dialog(
+                    ft.SnackBar(content=ft.Text("No completed documents with text in queue.", color=theme.text_primary), bgcolor=theme.glass_bg)
+                )
+                return
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            merged_lines = [
+                f"# ITT OCR - Batch Export ({len(completed)} documents)",
+                f"Exported on: {time.strftime('%Y-%m-%d %H:%M:%S')}",
+                "",
+                "=" * 40,
+                "",
+            ]
+            for idx, it in enumerate(completed, 1):
+                merged_lines.append(f"## Document {idx}: {it.file_name}")
+                merged_lines.append("")
+                merged_lines.append(it.extracted_text.strip())
+                merged_lines.append("")
+                merged_lines.append("-" * 30)
+                merged_lines.append("")
+
+            merged_text = "\n".join(merged_lines)
+            save_file(ext, merged_text, filename_override=f"batch_export_{timestamp}.{ext}")
+
         export_dialog = ft.AlertDialog(
             bgcolor=theme.glass_bg,
             shape=ft.RoundedRectangleBorder(radius=16),
-            title=ft.Text("Export extracted text", size=16, weight=ft.FontWeight.W_600, color=theme.text_primary),
+            title=ft.Text("Export Extracted Text", size=16, weight=ft.FontWeight.W_600, color=theme.text_primary),
             content=ft.Column(
                 tight=True,
-                spacing=8,
+                spacing=6,
                 controls=[
+                    ft.Text("Current Document", size=12, weight=ft.FontWeight.W_600, color=theme.text_secondary),
                     ft.ListTile(
-                        leading=ft.Icon(ft.Icons.DESCRIPTION_OUTLINED, color=theme.text_primary),
+                        leading=ft.Icon(ft.Icons.DESCRIPTION_OUTLINED, color=theme.text_primary, size=20),
                         title=ft.Text("Plain text (.txt)", size=13, color=theme.text_primary),
-                        on_click=lambda ev: save_file("txt"),
+                        on_click=lambda ev: save_file("txt", text_content),
                     ),
                     ft.ListTile(
-                        leading=ft.Icon(ft.Icons.CODE_OUTLINED, color=theme.text_primary),
+                        leading=ft.Icon(ft.Icons.CODE_OUTLINED, color=theme.text_primary, size=20),
                         title=ft.Text("Markdown (.md)", size=13, color=theme.text_primary),
-                        on_click=lambda ev: save_file("md"),
+                        on_click=lambda ev: save_file("md", text_content),
+                    ),
+                    ft.ListTile(
+                        leading=ft.Icon(ft.Icons.TABLE_CHART_OUTLINED, color=theme.text_primary, size=20),
+                        title=ft.Text("CSV / Spreadsheet (.csv)", size=13, color=theme.text_primary),
+                        subtitle=ft.Text("Converts markdown tables or row data", size=11, color=theme.text_secondary),
+                        on_click=lambda ev: save_file("csv", text_to_csv_string(text_content)),
+                    ),
+                    ft.Divider(height=1, color=theme.border),
+                    ft.Text("Batch Queue Export", size=12, weight=ft.FontWeight.W_600, color=theme.text_secondary),
+                    ft.ListTile(
+                        leading=ft.Icon(ft.Icons.FOLDER_ZIP_OUTLINED, color=theme.accent, size=20),
+                        title=ft.Text("Merge All Queue Documents (.txt)", size=13, color=theme.text_primary),
+                        subtitle=ft.Text("Combines all queue transcriptions", size=11, color=theme.text_secondary),
+                        on_click=lambda ev: export_merged("txt"),
+                    ),
+                    ft.ListTile(
+                        leading=ft.Icon(ft.Icons.ARTICLE_OUTLINED, color=theme.accent, size=20),
+                        title=ft.Text("Merge All Queue Documents (.md)", size=13, color=theme.text_primary),
+                        subtitle=ft.Text("Formatted markdown document with headers", size=11, color=theme.text_secondary),
+                        on_click=lambda ev: export_merged("md"),
                     ),
                 ],
             ),

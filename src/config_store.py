@@ -10,6 +10,7 @@ DEFAULT_CONFIG = {
     "api_key": "",
     "base_url": "https://api.openai.com/v1",
     "model_name": "gpt-4o-mini",
+    "auto_extract": True,
     "usage_stats": {
         "total_scanned_or_uploaded": 0,
         "total_processed": 0,

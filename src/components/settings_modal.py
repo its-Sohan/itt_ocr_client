@@ -61,6 +61,12 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
         dense=True,
     )
 
+    auto_extract_switch = ft.Switch(
+        label="Auto-extract on ingest (drop, paste, scan)",
+        value=config.get("auto_extract", True),
+        active_color=theme.accent,
+    )
+
     reduced_motion_switch = ft.Switch(
         label="Reduce motion",
         value=theme.reduced_motion,
@@ -76,6 +82,7 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
         config["api_key"] = final_api_key
         config["base_url"] = final_base_url
         config["model_name"] = model_field.value.strip()
+        config["auto_extract"] = auto_extract_switch.value
         config["reduced_motion"] = reduced_motion_switch.value
         save_config(config)
         theme.set_reduced_motion(reduced_motion_switch.value)
@@ -284,6 +291,7 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
                 base_url_field,
                 credential_actions_row,
                 model_field,
+                auto_extract_switch,
                 reduced_motion_switch,
                 ft.Row(
                     alignment=ft.MainAxisAlignment.END,
