@@ -1,12 +1,6 @@
 import flet as ft
-from src.styles import theme, RADIUS_PANEL, FONT_FAMILY_UI
+from src.styles import theme, RADIUS_PANEL, FONT_FAMILY_UI, safe_update, unfreeze
 from src.app_state import state, QueueItem
-
-def safe_update(control: ft.Control):
-    try:
-        control.update()
-    except Exception:
-        pass
 
 class Sidebar(ft.Container):
     def __init__(
@@ -338,6 +332,7 @@ class Sidebar(ft.Container):
         safe_update(self)
 
     def update_theme_ui(self):
+        unfreeze(self)
         self.bgcolor = theme.surface
         self.border = ft.Border.all(1, theme.border)
         self.title_text.color = theme.text_primary
@@ -349,24 +344,40 @@ class Sidebar(ft.Container):
         self.dropzone_container.bgcolor = theme.inset
         self.dropzone_container.border = ft.Border.all(1, theme.border)
 
-        self.browse_btn.style.bgcolor = theme.button_bg
-        self.browse_btn.style.side = ft.BorderSide(1, theme.border)
+        self.browse_btn.style = ft.ButtonStyle(
+            shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+            side=ft.BorderSide(1, theme.border),
+            padding=ft.Padding.symmetric(horizontal=6, vertical=7),
+            bgcolor=theme.button_bg,
+        )
         self.browse_icon.color = theme.text_primary
         self.browse_text.color = theme.text_primary
 
-        self.scan_btn.style.bgcolor = theme.button_bg
-        self.scan_btn.style.side = ft.BorderSide(1, theme.border)
+        self.scan_btn.style = ft.ButtonStyle(
+            shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+            side=ft.BorderSide(1, theme.border),
+            padding=ft.Padding.symmetric(horizontal=6, vertical=7),
+            bgcolor=theme.button_bg,
+        )
         self.scan_icon.color = theme.text_primary
         self.scan_text.color = theme.text_primary
 
-        self.paste_btn.style.bgcolor = theme.button_bg
-        self.paste_btn.style.side = ft.BorderSide(1, theme.border)
+        self.paste_btn.style = ft.ButtonStyle(
+            shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+            side=ft.BorderSide(1, theme.border),
+            padding=ft.Padding.symmetric(horizontal=6, vertical=7),
+            bgcolor=theme.button_bg,
+        )
         self.paste_icon.color = theme.text_primary
         self.paste_text.color = theme.text_primary
 
         self.search_field.border_color = theme.border
         self.search_field.focused_border_color = theme.accent
-        self.search_field.hint_style.color = theme.text_secondary
+        self.search_field.hint_style = ft.TextStyle(
+            size=12,
+            color=theme.text_secondary,
+            font_family=FONT_FAMILY_UI,
+        )
 
         self.update_queue_ui()
 

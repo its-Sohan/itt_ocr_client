@@ -1,7 +1,7 @@
 import asyncio
 import os
 import flet as ft
-from src.styles import theme, FONT_FAMILY_UI, RADIUS_GLASS, RADIUS_PANEL
+from src.styles import theme, FONT_FAMILY_UI, RADIUS_GLASS, RADIUS_PANEL, unfreeze
 from src.app_state import state
 from src.config_store import load_config
 from src.components.top_bar import create_top_bar
@@ -421,7 +421,11 @@ def main(page: ft.Page):
         page.bgcolor = theme.bg
         page.theme_mode = ft.ThemeMode.DARK if theme.is_dark else ft.ThemeMode.LIGHT
         app_container.bgcolor = theme.bg
-        page.update()
+        try:
+            unfreeze(app_container)
+            page.update()
+        except Exception as ex:
+            print(f"Error updating page on theme change: {ex}")
 
     theme.add_listener(on_theme_change)
 

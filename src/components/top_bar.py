@@ -1,11 +1,5 @@
 import flet as ft
-from src.styles import theme, RADIUS_GLASS, RADIUS_PANEL, FONT_FAMILY_UI
-
-def safe_update(control: ft.Control):
-    try:
-        control.update()
-    except Exception:
-        pass
+from src.styles import theme, RADIUS_GLASS, RADIUS_PANEL, FONT_FAMILY_UI, safe_update, unfreeze
 
 class TopBar(ft.Container):
     def __init__(
@@ -153,9 +147,13 @@ class TopBar(ft.Container):
         theme.add_listener(self.update_theme_ui)
 
     def _toggle_theme(self, e):
-        theme.toggle_theme()
+        try:
+            theme.toggle_theme()
+        except Exception as ex:
+            print(f"Theme toggle error: {ex}")
 
     def update_theme_ui(self):
+        unfreeze(self)
         self.bgcolor = theme.glass_bg
         self.border = theme.glass_border
         self.shadow = theme.glass_shadow

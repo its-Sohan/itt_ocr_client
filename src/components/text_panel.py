@@ -6,6 +6,8 @@ from src.styles import (
     FONT_FAMILY_MONO,
     FONT_FAMILY_BENGALI,
     contains_bengali,
+    safe_update,
+    unfreeze,
 )
 from src.app_state import state
 from src.services.clipboard import copy_text_to_clipboard
@@ -20,12 +22,6 @@ from src.services.text_transforms import (
 
 import os
 import time
-
-def safe_update(control: ft.Control):
-    try:
-        control.update()
-    except Exception:
-        pass
 
 def get_page(control: ft.Control):
     try:
@@ -221,6 +217,7 @@ class ParagraphBlock(ft.Container):
         safe_update(self)
 
     def update_theme(self):
+        unfreeze(self)
         active_border = ft.Border.all(2, theme.accent)
         normal_border = ft.Border.all(1, theme.border)
         active_bg = "rgba(37, 99, 235, 0.05)" if not theme.is_dark else "rgba(75, 136, 240, 0.10)"
@@ -571,7 +568,11 @@ class TextPanel(ft.Container):
             self.markdown_output_view.value = item.extracted_text
             self.char_count_text.value = f"{len(item.extracted_text):,} chars"
             is_bengali = contains_bengali(item.extracted_text)
-            self.raw_output_field.text_style.font_family = FONT_FAMILY_BENGALI if is_bengali else FONT_FAMILY_MONO
+            self.raw_output_field.text_style = ft.TextStyle(
+                font_family=FONT_FAMILY_BENGALI if is_bengali else FONT_FAMILY_MONO,
+                size=14 if is_bengali else 13,
+                color=theme.text_primary,
+            )
             self.raw_output_field.text_size = 14 if is_bengali else 13
             self._rebuild_blocks(item.extracted_text)
             self._update_math_status(item.extracted_text)
@@ -1353,7 +1354,11 @@ class TextPanel(ft.Container):
         text = item.extracted_text or ""
         self.char_count_text.value = f"{len(text):,} chars"
         is_bengali = contains_bengali(text)
-        self.raw_output_field.text_style.font_family = FONT_FAMILY_BENGALI if is_bengali else FONT_FAMILY_MONO
+        self.raw_output_field.text_style = ft.TextStyle(
+            font_family=FONT_FAMILY_BENGALI if is_bengali else FONT_FAMILY_MONO,
+            size=14 if is_bengali else 13,
+            color=theme.text_primary,
+        )
         self.raw_output_field.text_size = 14 if is_bengali else 13
 
         if item.status == "Processing":
@@ -1406,6 +1411,7 @@ class TextPanel(ft.Container):
                 pass
 
     def update_theme_ui(self):
+        unfreeze(self)
         self.bgcolor = theme.surface
         self.border = ft.Border.all(1, theme.border)
         self.header_title.color = theme.text_primary
@@ -1413,7 +1419,12 @@ class TextPanel(ft.Container):
         self.text_canvas.bgcolor = theme.inset
         self.text_canvas.border = ft.Border.all(1, theme.border)
 
-        self.raw_output_field.text_style.color = theme.text_primary
+        is_bengali = contains_bengali(self.raw_output_field.value or "")
+        self.raw_output_field.text_style = ft.TextStyle(
+            font_family=FONT_FAMILY_BENGALI if is_bengali else FONT_FAMILY_MONO,
+            size=14 if is_bengali else 13,
+            color=theme.text_primary,
+        )
         self.raw_output_field.cursor_color = theme.accent
 
         self.copy_btn.bgcolor = theme.button_bg
@@ -1450,8 +1461,12 @@ class TextPanel(ft.Container):
         if hasattr(self, "toolbar_divider"):
             self.toolbar_divider.bgcolor = theme.border
 
-        self.extract_btn.style.bgcolor = theme.accent
-        self.extract_btn.style.side = ft.BorderSide(2, theme.accent)
+        self.extract_btn.style = ft.ButtonStyle(
+            shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+            side=ft.BorderSide(2, theme.accent),
+            bgcolor=theme.accent,
+            padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+        )
 
         self.output_mode_btn.bgcolor = theme.button_bg
         self.output_mode_btn.border = ft.Border.all(1, theme.border)

@@ -3,14 +3,8 @@ import math
 import asyncio
 import flet as ft
 from PIL import Image
-from src.styles import theme, RADIUS_PANEL, RADIUS_GLASS, FONT_FAMILY_UI, FONT_FAMILY_MONO
+from src.styles import theme, RADIUS_PANEL, RADIUS_GLASS, FONT_FAMILY_UI, FONT_FAMILY_MONO, safe_update, unfreeze
 from src.app_state import state
-
-def safe_update(control: ft.Control):
-    try:
-        control.update()
-    except Exception:
-        pass
 
 def detect_paper_bounds(file_path: str) -> dict:
     """
@@ -425,6 +419,7 @@ class PreviewPanel(ft.Container):
         safe_update(self)
 
     def update_theme_ui(self):
+        unfreeze(self)
         self.bgcolor = theme.surface
         self.border = ft.Border.all(1, theme.border)
         self.inner_canvas.bgcolor = theme.inset

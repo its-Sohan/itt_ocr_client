@@ -1,14 +1,8 @@
 import flet as ft
-from src.styles import theme, RADIUS_PANEL, FONT_FAMILY_UI
+from src.styles import theme, RADIUS_PANEL, FONT_FAMILY_UI, safe_update, unfreeze
 from src.components.preview_panel import create_preview_panel
 from src.components.text_panel import create_text_panel
 from src.app_state import state
-
-def safe_update(control: ft.Control):
-    try:
-        control.update()
-    except Exception:
-        pass
 
 class MainPanel(ft.Container):
     def __init__(self, on_scan_click=None, on_extract_click=None):
@@ -54,6 +48,7 @@ class MainPanel(ft.Container):
         safe_update(self)
 
     def update_theme_ui(self):
+        unfreeze(self)
         safe_update(self)
 
 def create_main_panel(on_scan_click=None, on_extract_click=None):

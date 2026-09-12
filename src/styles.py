@@ -1,5 +1,5 @@
 import flet as ft
-from typing import Callable, List
+from typing import Callable, List, Any
 
 # Design Tokens strictly matching specification
 # Light mode tokens - Architectural Studio / Swiss precision
@@ -70,6 +70,57 @@ def safe_bengali_normalize(text: str) -> str:
         return ""
     return unicodedata.normalize("NFC", text)
 
+def unfreeze(obj: Any, visited=None) -> Any:
+    """
+    Recursively removes _frozen marker from an object, its children, and Prop-managed value objects
+    to prevent Flet 0.86+ 'RuntimeError: Frozen controls cannot be updated.'
+    """
+    if obj is None:
+        return obj
+    if visited is None:
+        visited = set()
+    oid = id(obj)
+    if oid in visited:
+        return obj
+    visited.add(oid)
+
+    if hasattr(obj, "_frozen"):
+        try:
+            del obj._frozen
+        except Exception:
+            try:
+                object.__delattr__(obj, "_frozen")
+            except Exception:
+                pass
+
+    if hasattr(obj, "_values") and isinstance(obj._values, dict):
+        for v in list(obj._values.values()):
+            unfreeze(v, visited)
+
+    if hasattr(obj, "__dict__"):
+        for k, v in list(obj.__dict__.items()):
+            if k not in ("_parent", "_page", "page", "session", "_Session__page") and not callable(v):
+                unfreeze(v, visited)
+
+    if hasattr(obj, "controls") and isinstance(obj.controls, list):
+        for c in list(obj.controls):
+            unfreeze(c, visited)
+
+    if hasattr(obj, "content") and obj.content:
+        unfreeze(obj.content, visited)
+
+    return obj
+
+def safe_update(control: Any):
+    """Safely updates a Flet control, unfreezing if necessary and catching any errors."""
+    if control is None:
+        return
+    try:
+        unfreeze(control)
+        control.update()
+    except Exception:
+        pass
+
 class ThemeState:
     def __init__(self):
         self.is_dark: bool = False
@@ -81,7 +132,7 @@ class ThemeState:
             self._listeners.append(listener)
 
     def notify(self):
-        for listener in self._listeners:
+        for listener in list(self._listeners):
             try:
                 listener()
             except Exception as ex:
