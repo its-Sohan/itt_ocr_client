@@ -15,6 +15,7 @@ class QueueItem:
     error_message: str = ""
     source: str = "upload"  # "upload", "scanner", or "clipboard"
     output_mode: str = "document"  # "document", "spreadsheet", "key_value", "raw_text"
+    block_boxes: Optional[List[dict]] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -31,6 +32,7 @@ class QueueItem:
             error_message=data.get("error_message", ""),
             source=data.get("source", "upload"),
             output_mode=data.get("output_mode", "document"),
+            block_boxes=data.get("block_boxes", None),
         )
 
 def format_file_size(size_bytes: int) -> str:
@@ -48,10 +50,11 @@ class AppState:
         self.active_output_mode: str = "document"
         self.is_processing_all: bool = False
         self.status_message: str = "Ready"
+        self.audit_mode: bool = False
+        self.active_block_index: int = 0
+        self.total_blocks_count: int = 0
         self._listeners: List[Callable[[], None]] = []
-
-        # Load persisted history threads on startup
-        self._load_cached_history()
+        # App starts with clean, empty queue (no mock or cached pages on opening)
 
     def _load_cached_history(self):
         try:
@@ -142,5 +145,23 @@ class AppState:
 
     def get_ready_items(self) -> List[QueueItem]:
         return [item for item in self.queue if item.status in ("Ready", "Failed")]
+
+    def set_audit_mode(self, enabled: bool):
+        self.audit_mode = enabled
+        self.notify()
+
+    def set_active_block_index(self, index: int):
+        self.active_block_index = max(0, index)
+        self.notify()
+
+    def next_audit_block(self):
+        if self.total_blocks_count > 0:
+            self.active_block_index = min(self.total_blocks_count - 1, self.active_block_index + 1)
+            self.notify()
+
+    def prev_audit_block(self):
+        if self.total_blocks_count > 0:
+            self.active_block_index = max(0, self.active_block_index - 1)
+            self.notify()
 
 state = AppState()

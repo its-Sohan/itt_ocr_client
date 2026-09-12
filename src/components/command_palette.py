@@ -2,6 +2,14 @@ import flet as ft
 from src.styles import theme, RADIUS_GLASS, RADIUS_PANEL, FONT_FAMILY_UI
 from src.app_state import state
 from src.services.clipboard import copy_text_to_clipboard
+from src.services.text_transforms import (
+    convert_digits_to_english,
+    convert_digits_to_bengali,
+    unwrap_broken_lines,
+    clean_whitespace_and_margins,
+    clean_table_formatting,
+    check_invoice_math,
+)
 
 def create_command_palette(
     page: ft.Page,
@@ -86,6 +94,54 @@ def create_command_palette(
             "action": lambda: (page.pop_dialog(), _copy_active_text(page)),
         },
         {
+            "icon": ft.Icons.FIND_IN_PAGE_OUTLINED,
+            "title": "Toggle Side-by-Side Audit Mode",
+            "desc": "Cross-check scan against text blocks with synchronized focus guide (Alt+A)",
+            "action": lambda: (page.pop_dialog(), state.set_audit_mode(not state.audit_mode)),
+        },
+        {
+            "icon": ft.Icons.AUTO_FIX_HIGH_ROUNDED,
+            "title": "Audit: Align lines with AI (Bounding boxes)",
+            "desc": "Detect exact 2D paragraph bounding boxes via vision AI model",
+            "action": lambda: (page.pop_dialog(), _trigger_ai_alignment(page)),
+        },
+        {
+            "icon": ft.Icons.NUMBERS_ROUNDED,
+            "title": "Format: Convert digits to English (১ ➔ 1)",
+            "desc": "Converts all Bengali numeral digits in active document to 0-9",
+            "action": lambda: (page.pop_dialog(), _apply_palette_transform(convert_digits_to_english, "Converted digits to English (123)")),
+        },
+        {
+            "icon": ft.Icons.FORMAT_LIST_NUMBERED_ROUNDED,
+            "title": "Format: Convert digits to Bengali (1 ➔ ১)",
+            "desc": "Converts all English numeral digits in active document to ০-৯",
+            "action": lambda: (page.pop_dialog(), _apply_palette_transform(convert_digits_to_bengali, "Converted digits to Bengali (১২৩)")),
+        },
+        {
+            "icon": ft.Icons.WRAP_TEXT_ROUNDED,
+            "title": "Format: Unwrap broken lines",
+            "desc": "Joins lines wrapped mid-sentence while preserving headings and lists",
+            "action": lambda: (page.pop_dialog(), _apply_palette_transform(unwrap_broken_lines, "Unwrapped broken lines")),
+        },
+        {
+            "icon": ft.Icons.TABLE_ROWS_ROUNDED,
+            "title": "Format: Align table columns",
+            "desc": "Cleans and aligns markdown table columns and pipes",
+            "action": lambda: (page.pop_dialog(), _apply_palette_transform(clean_table_formatting, "Aligned table grid")),
+        },
+        {
+            "icon": ft.Icons.SPACE_BAR_ROUNDED,
+            "title": "Format: Trim spaces & margins",
+            "desc": "Trims trailing spaces and collapses redundant blank lines",
+            "action": lambda: (page.pop_dialog(), _apply_palette_transform(clean_whitespace_and_margins, "Cleaned spacing & blank lines")),
+        },
+        {
+            "icon": ft.Icons.CALCULATE_OUTLINED,
+            "title": "Tools: Verify invoice math",
+            "desc": "Validates invoice line items against stated total locally",
+            "action": lambda: (page.pop_dialog(), _verify_palette_math(page)),
+        },
+        {
             "icon": ft.Icons.DARK_MODE_OUTLINED,
             "title": "Toggle theme",
             "desc": "Switch between light and dark mode",
@@ -113,6 +169,70 @@ def create_command_palette(
 
     results_column = ft.Column(spacing=2, scroll=ft.ScrollMode.AUTO, expand=True)
 
+    def _apply_palette_transform(func, action_name: str):
+        item = state.selected_item
+        if item and item.extracted_text:
+            new_text = func(item.extracted_text)
+            if new_text == item.extracted_text:
+                page.show_dialog(
+                    ft.SnackBar(
+                        content=ft.Text("No changes needed: text is already in target format.", size=13, color=theme.text_secondary),
+                        bgcolor=theme.glass_bg,
+                        duration=2000,
+                    )
+                )
+                return
+            item.extracted_text = new_text
+            state.notify()
+            page.show_dialog(
+                ft.SnackBar(
+                    content=ft.Text(action_name, size=13, weight=ft.FontWeight.W_500, color=theme.text_primary),
+                    bgcolor=theme.glass_bg,
+                    duration=1800,
+                )
+            )
+        else:
+            page.show_dialog(
+                ft.SnackBar(
+                    content=ft.Text("No extracted text to format", size=13, color=theme.text_secondary),
+                    bgcolor=theme.glass_bg,
+                    duration=1500,
+                )
+            )
+
+    def _verify_palette_math(p: ft.Page):
+        item = state.selected_item
+        if item and item.extracted_text:
+            res = check_invoice_math(item.extracted_text)
+            if not res:
+                p.show_dialog(
+                    ft.SnackBar(
+                        content=ft.Text("No invoice table or total rows found in document.", size=13, color=theme.text_secondary),
+                        bgcolor=theme.glass_bg,
+                        duration=2000,
+                    )
+                )
+            elif res["matched"]:
+                p.show_dialog(
+                    ft.SnackBar(
+                        content=ft.Text(f"✓ Verified! All items sum up to total: {res['total']:,.2f}", size=13, weight=ft.FontWeight.W_500, color="#10B981"),
+                        bgcolor=theme.glass_bg,
+                        duration=3000,
+                    )
+                )
+            else:
+                p.show_dialog(
+                    ft.SnackBar(
+                        content=ft.Text(f"⚠ Mismatch: Items sum ({res['calculated']:,.2f}) vs Stated total ({res['total']:,.2f})", size=13, weight=ft.FontWeight.W_500, color="#F59E0B"),
+                        bgcolor=theme.glass_bg,
+                        duration=3000,
+                    )
+                )
+        else:
+            p.show_dialog(
+                ft.SnackBar(content=ft.Text("No extracted text to verify", size=13, color=theme.text_secondary), bgcolor=theme.glass_bg)
+            )
+
     def _copy_active_text(p: ft.Page):
         item = state.selected_item
         if item and item.extracted_text:
@@ -138,6 +258,64 @@ def create_command_palette(
                 )
             except Exception:
                 pass
+
+    def _trigger_ai_alignment(p: ft.Page):
+        item = state.selected_item
+        if not item or not item.file_path or not os.path.exists(item.file_path):
+            p.show_dialog(ft.SnackBar(content=ft.Text("No image document loaded to align.", color=theme.text_secondary), bgcolor=theme.glass_bg))
+            return
+
+        text = item.extracted_text
+        if not text:
+            p.show_dialog(ft.SnackBar(content=ft.Text("Extract text first before aligning with AI.", color=theme.text_secondary), bgcolor=theme.glass_bg))
+            return
+
+        if "\n\n" in text:
+            raw_blocks = [b.strip() for b in text.split("\n\n") if b.strip()]
+        elif "\n" in text:
+            raw_blocks = [b.strip() for b in text.split("\n") if b.strip()]
+        else:
+            raw_blocks = [text.strip()]
+
+        p.show_dialog(
+            ft.SnackBar(
+                content=ft.Text("Analyzing image & aligning paragraph bounding boxes with AI...", size=13, color=theme.text_primary),
+                bgcolor=theme.glass_bg,
+                duration=3000,
+            )
+        )
+
+        async def _align_task():
+            from src.services.ocr_llm import align_blocks_with_ai
+            try:
+                boxes = await align_blocks_with_ai(item.file_path, raw_blocks)
+                if boxes:
+                    item.block_boxes = boxes
+                    state.set_audit_mode(True)
+                    state.notify()
+                    p.show_dialog(
+                        ft.SnackBar(
+                            content=ft.Text(f"AI aligned {len(boxes)} paragraph coordinates with pinpoint accuracy!", size=13, color="#10B981"),
+                            bgcolor=theme.glass_bg,
+                            duration=2500,
+                        )
+                    )
+                else:
+                    p.show_dialog(
+                        ft.SnackBar(
+                            content=ft.Text("AI returned no boxes, using paper bounds.", size=13, color=theme.text_secondary),
+                            bgcolor=theme.glass_bg,
+                        )
+                    )
+            except Exception as ex:
+                p.show_dialog(
+                    ft.SnackBar(
+                        content=ft.Text(f"AI alignment failed: {str(ex)}", size=13, color="#EF4444"),
+                        bgcolor=theme.glass_bg,
+                    )
+                )
+
+        p.run_task(_align_task)
 
     def render_command_item(cmd):
         return ft.Container(

@@ -103,7 +103,7 @@ class Sidebar(ft.Container):
                 shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
                 side=ft.BorderSide(1, theme.border),
                 padding=ft.Padding.symmetric(horizontal=6, vertical=7),
-                bgcolor=theme.surface,
+                bgcolor=theme.button_bg,
             ),
             expand=True,
             on_click=self.on_browse_click,
@@ -123,7 +123,7 @@ class Sidebar(ft.Container):
                 shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
                 side=ft.BorderSide(1, theme.border),
                 padding=ft.Padding.symmetric(horizontal=6, vertical=7),
-                bgcolor=theme.surface,
+                bgcolor=theme.button_bg,
             ),
             expand=True,
             on_click=self.on_scan_click,
@@ -143,7 +143,7 @@ class Sidebar(ft.Container):
                 shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
                 side=ft.BorderSide(1, theme.border),
                 padding=ft.Padding.symmetric(horizontal=6, vertical=7),
-                bgcolor=theme.surface,
+                bgcolor=theme.button_bg,
             ),
             expand=True,
             on_click=self.on_paste_click,
@@ -151,7 +151,7 @@ class Sidebar(ft.Container):
         )
 
         self.dropzone_container = ft.Container(
-            bgcolor=theme.bg,
+            bgcolor=theme.inset,
             border=ft.Border.all(1, theme.border),
             border_radius=RADIUS_PANEL,
             padding=12,
@@ -243,8 +243,8 @@ class Sidebar(ft.Container):
         )
 
         item_container = ft.Container(
-            bgcolor=theme.bg if is_selected else theme.surface,
-            border=ft.Border.all(1, theme.accent if is_selected else theme.border),
+            bgcolor=theme.inset if is_selected else theme.surface,
+            border=ft.Border.all(1.5 if is_selected else 1, theme.accent if is_selected else theme.border),
             border_radius=RADIUS_PANEL,
             padding=ft.Padding.symmetric(horizontal=10, vertical=8),
             ink=True,
@@ -346,20 +346,20 @@ class Sidebar(ft.Container):
         self.clear_btn.icon_color = theme.text_secondary
         self.dropzone_text.color = theme.text_primary
         self.dropzone_subtext.color = theme.text_secondary
-        self.dropzone_container.bgcolor = theme.bg
+        self.dropzone_container.bgcolor = theme.inset
         self.dropzone_container.border = ft.Border.all(1, theme.border)
 
-        self.browse_btn.style.bgcolor = theme.surface
+        self.browse_btn.style.bgcolor = theme.button_bg
         self.browse_btn.style.side = ft.BorderSide(1, theme.border)
         self.browse_icon.color = theme.text_primary
         self.browse_text.color = theme.text_primary
 
-        self.scan_btn.style.bgcolor = theme.surface
+        self.scan_btn.style.bgcolor = theme.button_bg
         self.scan_btn.style.side = ft.BorderSide(1, theme.border)
         self.scan_icon.color = theme.text_primary
         self.scan_text.color = theme.text_primary
 
-        self.paste_btn.style.bgcolor = theme.surface
+        self.paste_btn.style.bgcolor = theme.button_bg
         self.paste_btn.style.side = ft.BorderSide(1, theme.border)
         self.paste_icon.color = theme.text_primary
         self.paste_text.color = theme.text_primary

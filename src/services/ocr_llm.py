@@ -1,5 +1,8 @@
 import base64
 import os
+import json
+import re
+from typing import List, Optional
 import httpx
 from src.config_store import load_config, update_usage_stats
 from src.styles import safe_bengali_normalize
@@ -189,3 +192,130 @@ async def extract_text_with_llm(file_path: str, mode: str = "document") -> str:
     extracted_text = safe_bengali_normalize(extracted.strip())
     update_usage_stats(characters=len(extracted_text), success=True)
     return extracted_text
+
+async def align_blocks_with_ai(file_path: str, blocks: List[str]) -> List[dict]:
+    """
+    Sends document image and paragraph blocks to the multimodal vision endpoint
+    to extract normalized 2D bounding boxes [ymin, xmin, ymax, xmax] in range 0-1000.
+    Returns list of dicts: [{'index': 0, 'ymin': 310, 'xmin': 250, 'ymax': 420, 'xmax': 700}, ...]
+    """
+    if not blocks:
+        return []
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Image file not found: {file_path}")
+
+    config = load_config()
+    api_key = config.get("api_key", "").strip()
+    raw_base = config.get("base_url", "https://api.openai.com/v1").strip()
+    clean_base = raw_base.rstrip("/")
+    if clean_base.endswith("/chat/completions"):
+        url = clean_base
+    else:
+        url = f"{clean_base}/chat/completions"
+
+    model_name = config.get("model_name", "gpt-4o-mini").strip()
+
+    if not api_key and "localhost" not in clean_base and "127.0.0.1" not in clean_base:
+        raise ValueError("API Key is missing. Please configure your API Key in Settings.")
+
+    mime_type = get_mime_type(file_path)
+    base64_data = encode_image_base64(file_path)
+    data_url = f"data:{mime_type};base64,{base64_data}"
+
+    headers = {
+        "Content-Type": "application/json",
+    }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    if "openrouter" in clean_base.lower():
+        headers["HTTP-Referer"] = "https://github.com/its-Sohan/itt_ocr_client"
+        headers["X-Title"] = "ITT OCR Client"
+
+    # Summarize blocks to fit in prompt concisely
+    blocks_preview = []
+    for idx, b in enumerate(blocks):
+        clean_snip = " ".join(b.split())[:120]
+        blocks_preview.append(f"Block {idx}: \"{clean_snip}\"")
+    blocks_text = "\n".join(blocks_preview)
+
+    system_prompt = (
+        "You are an expert document visual grounding and layout analysis engine. "
+        "Your task is to detect the exact 2D bounding boxes for each given text block in the image. "
+        "Coordinates must be normalized integers from 0 to 1000, where:\n"
+        "- 0 is the top edge, 1000 is the bottom edge of the image.\n"
+        "- 0 is the left edge, 1000 is the right edge of the image.\n"
+        "Return strictly a JSON array of objects with keys 'index' and 'box_2d':\n"
+        '[{"index": 0, "box_2d": [ymin, xmin, ymax, xmax]}, ...]\n'
+        "Ensure ymin < ymax and xmin < xmax. Do not include markdown commentary."
+    )
+
+    user_prompt = (
+        f"Detect the normalized 2D bounding boxes [ymin, xmin, ymax, xmax] (0 to 1000) "
+        f"for these {len(blocks)} text blocks in the image:\n\n{blocks_text}\n\n"
+        "Output strictly the JSON array."
+    )
+
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_prompt},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            },
+        ],
+        "temperature": 0.1,
+    }
+
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+        response = await client.post(url, headers=headers, json=payload)
+
+    if response.status_code != 200:
+        raise RuntimeError(f"AI Alignment API Error ({response.status_code}): {response.text}")
+
+    result_json = response.json()
+    choices = result_json.get("choices", [])
+    if not choices:
+        raise RuntimeError("AI Alignment returned empty choices.")
+
+    content = choices[0].get("message", {}).get("content", "").strip()
+
+    # Parse JSON array from content
+    parsed_boxes = []
+    json_match = re.search(r'\[\s*\{.*\}\s*\]', content, re.DOTALL)
+    if json_match:
+        try:
+            raw_list = json.loads(json_match.group(0))
+            for item in raw_list:
+                if not isinstance(item, dict):
+                    continue
+                idx = item.get("index", len(parsed_boxes))
+                box = item.get("box_2d") or item.get("bbox")
+                if isinstance(box, list) and len(box) == 4:
+                    ymin = max(0, min(1000, int(box[0])))
+                    xmin = max(0, min(1000, int(box[1])))
+                    ymax = max(0, min(1000, int(box[2])))
+                    xmax = max(0, min(1000, int(box[3])))
+                    if ymax > ymin and xmax > xmin:
+                        parsed_boxes.append({
+                            "index": idx,
+                            "ymin": ymin,
+                            "xmin": xmin,
+                            "ymax": ymax,
+                            "xmax": xmax,
+                        })
+                elif "ymin" in item and "ymax" in item:
+                    parsed_boxes.append({
+                        "index": idx,
+                        "ymin": max(0, min(1000, int(item["ymin"]))),
+                        "xmin": max(0, min(1000, int(item.get("xmin", 50)))),
+                        "ymax": max(0, min(1000, int(item["ymax"]))),
+                        "xmax": max(0, min(1000, int(item.get("xmax", 950)))),
+                    })
+        except Exception:
+            pass
+
+    return parsed_boxes

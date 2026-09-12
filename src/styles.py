@@ -2,37 +2,45 @@ import flet as ft
 from typing import Callable, List
 
 # Design Tokens strictly matching specification
-# Light mode tokens
-LIGHT_BG = "#FAFAF9"
+# Light mode tokens - Architectural Studio / Swiss precision
+# Background: Grounded neutral desktop surface (#ECECE8)
+# Surface: Pure elevated white workspace panels (#FFFFFF)
+# Inset: Subtle recessed working canvas for document preview & text (#F4F4F0)
+# Border: Crisp engineered 1px hairline (#CFCFC9) with clear visual definition
+LIGHT_BG = "#ECECE8"
 LIGHT_SURFACE = "#FFFFFF"
-LIGHT_BORDER = "#E4E4E1"
-LIGHT_TEXT_PRIMARY = "#1C1C1A"
-LIGHT_TEXT_SECONDARY = "#6B6B66"
-LIGHT_ACCENT = "#2F6FED"
+LIGHT_INSET = "#F4F4F0"
+LIGHT_BORDER = "#CFCFC9"
+LIGHT_BORDER_SUBTLE = "#DFDFD9"
+LIGHT_BUTTON_BG = "#F7F7F5"
+LIGHT_TEXT_PRIMARY = "#141412"
+LIGHT_TEXT_SECONDARY = "#565650"
+LIGHT_ACCENT = "#2563EB"
 
-# Light mode glass spec (using 0xAARRGGBB hex for robust Flutter parsing)
-# background: rgba(255, 255, 255, 0.72) -> #B8FFFFFF
-# border: 1px solid rgba(255, 255, 255, 0.4) -> #66FFFFFF or clean hairline #E4E4E1
-# box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08) -> #14000000
-LIGHT_GLASS_BG = "#B8FFFFFF"
-LIGHT_GLASS_BORDER = "#E4E4E1"
-LIGHT_GLASS_SHADOW_COLOR = "#14000000"
+# Light mode glass spec
+LIGHT_GLASS_BG = "#E6FFFFFF"
+LIGHT_GLASS_BORDER = "#CFCFC9"
+LIGHT_GLASS_SHADOW_COLOR = "#15000000"
 
-# Dark mode tokens
-DARK_BG = "#121212"
-DARK_SURFACE = "#1B1B1B"
-DARK_BORDER = "#2E2E2C"
-DARK_TEXT_PRIMARY = "#F2F2EF"
-DARK_TEXT_SECONDARY = "#9A9A94"
-DARK_ACCENT = "#5B8DEF"
+# Dark mode tokens - Deep technical workspace
+# Background: Deep charcoal desk (#111111)
+# Surface: Elevated carbon panels (#1E1E1E)
+# Inset: Recessed deep canvas (#141414)
+# Border: Crisp separation border (#383835)
+DARK_BG = "#111111"
+DARK_SURFACE = "#1E1E1E"
+DARK_INSET = "#141414"
+DARK_BORDER = "#383835"
+DARK_BORDER_SUBTLE = "#282826"
+DARK_BUTTON_BG = "#262626"
+DARK_TEXT_PRIMARY = "#F4F4F0"
+DARK_TEXT_SECONDARY = "#A2A29C"
+DARK_ACCENT = "#4B88F0"
 
 # Dark mode glass spec
-# background: rgba(24, 24, 24, 0.6) -> #99181818
-# border: 1px solid rgba(255, 255, 255, 0.08) -> #14FFFFFF
-# box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) -> #66000000
-DARK_GLASS_BG = "#99181818"
-DARK_GLASS_BORDER = "#2E2E2C"
-DARK_GLASS_SHADOW_COLOR = "#66000000"
+DARK_GLASS_BG = "#B31E1E1E"
+DARK_GLASS_BORDER = "#383835"
+DARK_GLASS_SHADOW_COLOR = "#70000000"
 
 # Shared Radii Hierarchy
 # Larger radius (16-20px) on floating glass elements
@@ -97,8 +105,28 @@ class ThemeState:
         return DARK_SURFACE if self.is_dark else LIGHT_SURFACE
 
     @property
+    def inset(self) -> str:
+        return DARK_INSET if self.is_dark else LIGHT_INSET
+
+    @property
     def border(self) -> str:
         return DARK_BORDER if self.is_dark else LIGHT_BORDER
+
+    @property
+    def border_subtle(self) -> str:
+        return DARK_BORDER_SUBTLE if self.is_dark else LIGHT_BORDER_SUBTLE
+
+    @property
+    def button_bg(self) -> str:
+        return DARK_BUTTON_BG if self.is_dark else LIGHT_BUTTON_BG
+
+    @property
+    def menu_bg(self) -> str:
+        return "#262626" if self.is_dark else "#FFFFFF"
+
+    @property
+    def menu_border(self) -> str:
+        return "#40403C" if self.is_dark else "#CFCFC9"
 
     @property
     def text_primary(self) -> str:

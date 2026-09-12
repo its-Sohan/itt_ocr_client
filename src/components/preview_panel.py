@@ -2,7 +2,8 @@ import os
 import math
 import asyncio
 import flet as ft
-from src.styles import theme, RADIUS_PANEL, RADIUS_GLASS, FONT_FAMILY_UI
+from PIL import Image
+from src.styles import theme, RADIUS_PANEL, RADIUS_GLASS, FONT_FAMILY_UI, FONT_FAMILY_MONO
 from src.app_state import state
 
 def safe_update(control: ft.Control):
@@ -11,17 +12,42 @@ def safe_update(control: ft.Control):
     except Exception:
         pass
 
+def detect_paper_bounds(file_path: str) -> dict:
+    """
+    Lightweight PIL luminance scan to find paper boundaries [y_min, y_max].
+    Runs in < 5ms.
+    """
+    try:
+        with Image.open(file_path) as img:
+            thumb = img.convert("L").resize((64, 64))
+            pixels = list(thumb.get_flattened_data() if hasattr(thumb, "get_flattened_data") else thumb.getdata())
+            w, h = 64, 64
+            row_lums = [sum(pixels[y * w : (y + 1) * w]) / w for y in range(h)]
+            min_lum = min(row_lums)
+            max_lum = max(row_lums)
+            if max_lum - min_lum > 30:
+                thresh = min_lum + (max_lum - min_lum) * 0.40
+                bright_rows = [y for y, lum in enumerate(row_lums) if lum >= thresh]
+                if bright_rows and len(bright_rows) >= 8:
+                    y_min = max(0.02, bright_rows[0] / 64.0)
+                    y_max = min(0.96, bright_rows[-1] / 64.0)
+                    return {"ymin": y_min, "ymax": y_max}
+            return {"ymin": 0.06, "ymax": 0.92}
+    except Exception:
+        return {"ymin": 0.06, "ymax": 0.92}
+
 class PreviewPanel(ft.Container):
     def __init__(self, on_scan_click=None):
         self.on_scan_click = on_scan_click
         self.rotation_degrees = 0
         self.is_scanning_anim = False
         self._sweep_task = None
+        self._paper_bounds_cache = {}
 
-        # Flat Document Canvas container
+        # Image control (fills aspect-ratio viewport perfectly)
         self.image_control = ft.Image(
             src="",
-            fit=ft.BoxFit.CONTAIN,
+            fit=ft.BoxFit.FILL,
             border_radius=RADIUS_PANEL,
             rotate=ft.Rotate(angle=0),
         )
@@ -135,6 +161,54 @@ class PreviewPanel(ft.Container):
             animate_opacity=150,
         )
 
+        # Synchronized Audit Focus Guide overlay
+        self.audit_badge_text = ft.Text(
+            "LINE 01",
+            size=10,
+            weight=ft.FontWeight.W_600,
+            color=theme.accent,
+            font_family=FONT_FAMILY_MONO,
+        )
+        self.audit_badge = ft.Container(
+            content=self.audit_badge_text,
+            bgcolor=theme.surface,
+            border=ft.Border.all(1, theme.accent),
+            border_radius=3,
+            padding=ft.Padding.symmetric(horizontal=5, vertical=1),
+        )
+        self.audit_focus_box = ft.Container(
+            height=46,
+            margin=ft.Margin.symmetric(horizontal=12),
+            border_radius=RADIUS_PANEL,
+            border=ft.Border.all(1.5, theme.accent),
+            bgcolor="rgba(37, 99, 235, 0.10)" if not theme.is_dark else "rgba(75, 136, 240, 0.16)",
+            padding=ft.Padding.only(left=8, top=4),
+            content=ft.Row(
+                alignment=ft.MainAxisAlignment.START,
+                vertical_alignment=ft.CrossAxisAlignment.START,
+                controls=[self.audit_badge],
+            ),
+        )
+        self.audit_overlay_container = ft.Container(
+            expand=True,
+            alignment=ft.Alignment(0, -0.90),
+            animate_align=ft.Animation(180, ft.AnimationCurve.EASE_OUT),
+            content=self.audit_focus_box,
+            visible=False,
+        )
+
+        # Image Viewport (constrained strictly to image aspect ratio, zero letterbox drift)
+        self.image_viewport = ft.Container(
+            alignment=ft.Alignment.CENTER,
+            content=ft.Stack(
+                expand=True,
+                controls=[
+                    self.image_control,
+                    self.audit_overlay_container,
+                ],
+            ),
+        )
+
         # Document Canvas Stack
         self.canvas_stack = ft.Stack(
             expand=True,
@@ -145,10 +219,10 @@ class PreviewPanel(ft.Container):
             ],
         )
 
-        # Inner Canvas Container (uses theme.bg: #FAFAF9 in Light mode, #121212 in Dark mode)
+        # Inner Canvas Container (uses theme.inset: #F4F4F0 in Light mode, #141414 in Dark mode)
         self.inner_canvas = ft.Container(
             expand=True,
-            bgcolor=theme.bg,
+            bgcolor=theme.inset,
             border=ft.Border.all(1, theme.border),
             border_radius=RADIUS_PANEL,
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
@@ -258,6 +332,59 @@ class PreviewPanel(ft.Container):
         self.scan_line.visible = False
         safe_update(self.scan_line)
 
+    def _get_cached_paper_bounds(self, file_path: str) -> dict:
+        if file_path in self._paper_bounds_cache:
+            return self._paper_bounds_cache[file_path]
+        bounds = detect_paper_bounds(file_path)
+        self._paper_bounds_cache[file_path] = bounds
+        return bounds
+
+    def update_audit_guide(self):
+        item = state.selected_item
+        has_image = bool(item and item.file_path and os.path.exists(item.file_path))
+        if not state.audit_mode or not has_image or state.total_blocks_count <= 0:
+            if self.audit_overlay_container.visible:
+                self.audit_overlay_container.visible = False
+                safe_update(self.audit_overlay_container)
+            return
+
+        self.audit_overlay_container.visible = True
+        n = state.total_blocks_count
+        k = min(n - 1, max(0, state.active_block_index))
+
+        boxes = getattr(item, "block_boxes", None)
+        if boxes and k < len(boxes) and isinstance(boxes[k], dict):
+            box = boxes[k]
+            ymin = box.get("ymin", 0)
+            ymax = box.get("ymax", 1000)
+            xmin = box.get("xmin", 0)
+            xmax = box.get("xmax", 1000)
+
+            cy = (ymin + ymax) / 2000.0
+            cx = (xmin + xmax) / 2000.0
+            align_y = -1.0 + (2.0 * cy)
+            align_x = -1.0 + (2.0 * cx)
+
+            self.audit_overlay_container.alignment = ft.Alignment(align_x, align_y)
+            self.audit_focus_box.height = max(36, int((ymax - ymin) / 1000.0 * 500))
+        else:
+            paper = self._get_cached_paper_bounds(item.file_path)
+            y_start = paper.get("ymin", 0.08)
+            y_end = paper.get("ymax", 0.90)
+
+            if n > 1:
+                fraction = k / (n - 1)
+                paper_norm_y = y_start + fraction * (y_end - y_start)
+            else:
+                paper_norm_y = (y_start + y_end) / 2.0
+
+            align_y = -1.0 + (2.0 * paper_norm_y)
+            self.audit_overlay_container.alignment = ft.Alignment(0, align_y)
+            self.audit_focus_box.height = 46
+
+        self.audit_badge_text.value = f"LINE {k + 1:02d}"
+        safe_update(self.audit_overlay_container)
+
     def update_preview(self):
         item = state.selected_item
         if not item:
@@ -265,13 +392,23 @@ class PreviewPanel(ft.Container):
             self.canvas_content.content = self.empty_placeholder
             self.floating_toolbar.visible = False
             self.stop_scan_animation()
+            self.update_audit_guide()
             safe_update(self)
             return
 
         self.doc_meta.value = f"{item.file_name} ({item.file_size_str})"
         if os.path.exists(item.file_path):
             self.image_control.src = item.file_path
-            self.canvas_content.content = self.image_control
+            ar = None
+            try:
+                with Image.open(item.file_path) as img:
+                    if img.height > 0:
+                        ar = img.width / img.height
+            except Exception:
+                pass
+
+            self.image_viewport.aspect_ratio = ar
+            self.canvas_content.content = self.image_viewport
             self.floating_toolbar.visible = True
         else:
             self.canvas_content.content = self.empty_placeholder
@@ -284,12 +421,13 @@ class PreviewPanel(ft.Container):
             if self.is_scanning_anim:
                 self.stop_scan_animation()
 
+        self.update_audit_guide()
         safe_update(self)
 
     def update_theme_ui(self):
         self.bgcolor = theme.surface
         self.border = ft.Border.all(1, theme.border)
-        self.inner_canvas.bgcolor = theme.bg
+        self.inner_canvas.bgcolor = theme.inset
         self.inner_canvas.border = ft.Border.all(1, theme.border)
         self.empty_icon_box.bgcolor = theme.surface
         self.empty_icon_box.border = ft.Border.all(1, theme.border)
@@ -299,6 +437,13 @@ class PreviewPanel(ft.Container):
         self.doc_title.color = theme.text_primary
         self.doc_meta.color = theme.text_secondary
         self.scan_line.bgcolor = theme.accent
+
+        self.audit_focus_box.border = ft.Border.all(1.5, theme.accent)
+        self.audit_focus_box.bgcolor = "rgba(37, 99, 235, 0.10)" if not theme.is_dark else "rgba(75, 136, 240, 0.16)"
+        self.audit_badge.bgcolor = theme.surface
+        self.audit_badge.border = ft.Border.all(1, theme.accent)
+        self.audit_badge_text.color = theme.accent
+        self.update_audit_guide()
 
         self.floating_toolbar.bgcolor = theme.glass_bg
         self.floating_toolbar.border = theme.glass_border

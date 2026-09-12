@@ -439,16 +439,32 @@ def main(page: ft.Page):
 
     page.on_resized = on_page_resize
 
-    # Global keyboard shortcuts: Ctrl+K / Cmd+K, Ctrl+Enter, Ctrl+O, Ctrl+V
+    # Global keyboard shortcuts: Ctrl+K / Cmd+K, Ctrl+Enter, Ctrl+O, Ctrl+V, Alt+A, Audit navigation (j/k, Up/Down, Esc)
     def on_keyboard(e: ft.KeyboardEvent):
-        if e.key.lower() == "k" and (e.ctrl or e.meta):
+        key_low = (e.key or "").lower()
+        if key_low == "k" and (e.ctrl or e.meta):
             open_command_palette()
-        elif e.key.lower() == "enter" and (e.ctrl or e.meta):
+        elif key_low == "enter" and (e.ctrl or e.meta):
             on_extract_click(None)
-        elif e.key.lower() == "o" and (e.ctrl or e.meta):
+        elif key_low == "o" and (e.ctrl or e.meta):
             on_browse_files(None)
-        elif e.key.lower() == "v" and (e.ctrl or e.meta):
+        elif key_low == "v" and (e.ctrl or e.meta):
             on_paste_action(None, show_feedback_on_empty=False)
+        elif (key_low == "a" and e.alt) or (key_low == "a" and (e.ctrl or e.meta) and e.shift):
+            main_panel_comp.text_panel.toggle_audit_mode()
+        elif state.audit_mode:
+            dialogs_ctrls = getattr(getattr(page, "_dialogs", None), "controls", [])
+            is_dialog_open = any(getattr(dlg, "open", False) for dlg in dialogs_ctrls)
+            is_blocks_view = getattr(main_panel_comp.text_panel, "view_mode", "") == "blocks"
+
+            if not is_dialog_open:
+                if e.key in ("Escape", "Esc"):
+                    state.set_audit_mode(False)
+                elif is_blocks_view and not (e.ctrl or e.meta or e.alt):
+                    if e.key in ("Arrow Down", "ArrowDown", "Down") or key_low == "j":
+                        state.next_audit_block()
+                    elif e.key in ("Arrow Up", "ArrowUp", "Up") or key_low == "k":
+                        state.prev_audit_block()
 
     page.on_keyboard_event = on_keyboard
 
