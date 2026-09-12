@@ -13,7 +13,8 @@ class QueueItem:
     status: str = "Ready"  # "Ready", "Processing", "Done", "Failed"
     extracted_text: str = ""
     error_message: str = ""
-    source: str = "upload"  # "upload" or "scanner"
+    source: str = "upload"  # "upload", "scanner", or "clipboard"
+    output_mode: str = "document"  # "document", "spreadsheet", "key_value", "raw_text"
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -29,6 +30,7 @@ class QueueItem:
             extracted_text=data.get("extracted_text", ""),
             error_message=data.get("error_message", ""),
             source=data.get("source", "upload"),
+            output_mode=data.get("output_mode", "document"),
         )
 
 def format_file_size(size_bytes: int) -> str:
@@ -43,6 +45,7 @@ class AppState:
     def __init__(self):
         self.queue: List[QueueItem] = []
         self.selected_item_id: Optional[str] = None
+        self.active_output_mode: str = "document"
         self.is_processing_all: bool = False
         self.status_message: str = "Ready"
         self._listeners: List[Callable[[], None]] = []
@@ -106,12 +109,18 @@ class AppState:
             file_name=file_name,
             file_size_str=size_str,
             source=source,
+            output_mode=self.active_output_mode,
         )
         self.queue.append(item)
         if not self.selected_item_id:
             self.selected_item_id = item.id
         self.notify()
         return item
+
+    def set_active_output_mode(self, mode: str):
+        if mode in ("document", "spreadsheet", "key_value", "raw_text"):
+            self.active_output_mode = mode
+            self.notify()
 
     def select_item(self, item_id: str):
         self.selected_item_id = item_id

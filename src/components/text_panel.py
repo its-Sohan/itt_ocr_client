@@ -8,6 +8,7 @@ from src.styles import (
     contains_bengali,
 )
 from src.app_state import state
+from src.services.clipboard import copy_text_to_clipboard
 
 import os
 import time
@@ -17,6 +18,12 @@ def safe_update(control: ft.Control):
         control.update()
     except Exception:
         pass
+
+def get_page(control: ft.Control):
+    try:
+        return control.page
+    except Exception:
+        return None
 
 def get_export_dir() -> str:
     desktop = os.path.expanduser("~/Desktop")
@@ -53,6 +60,34 @@ def text_to_csv_string(text: str) -> str:
             else:
                 writer.writerow([line_str])
     return output.getvalue()
+
+def text_to_tsv_string(text: str) -> str:
+    lines = text.strip().splitlines()
+    table_lines = [l.strip() for l in lines if l.strip().startswith("|") and l.strip().endswith("|")]
+    if table_lines:
+        tsv_rows = []
+        for line in table_lines:
+            inner = line.strip("|")
+            cells = [c.strip() for c in inner.split("|")]
+            # Skip divider rows like |---|---|
+            if all(set(c).issubset({"-", ":", " "}) for c in cells if c):
+                continue
+            tsv_rows.append("\t".join(cells))
+        return "\n".join(tsv_rows)
+    else:
+        tsv_rows = []
+        for line in lines:
+            line_str = line.strip()
+            if not line_str:
+                continue
+            if "\t" in line_str:
+                tsv_rows.append(line_str)
+            elif "," in line_str:
+                cells = [c.strip() for c in line_str.split(",")]
+                tsv_rows.append("\t".join(cells))
+            else:
+                tsv_rows.append(line_str)
+        return "\n".join(tsv_rows)
 
 class ParagraphBlock(ft.Container):
     def __init__(self, text: str, on_copy):
@@ -126,7 +161,8 @@ class ParagraphBlock(ft.Container):
         self.copy_label.value = "Copied"
         self.copy_label.color = "#10B981" if not theme.is_dark else "#34D399"
         safe_update(self)
-        self.on_copy(self.block_text)
+        p = getattr(e, "page", None) or getattr(getattr(e, "control", None), "page", None) or get_page(self)
+        self.on_copy(self.block_text, page=p)
 
     def _on_hover(self, e: ft.HoverEvent):
         is_hovered = (e.data == "true")
@@ -280,6 +316,59 @@ class TextPanel(ft.Container):
             tooltip="Export extracted text to file",
         )
 
+        # Output Mode Toggle
+        self.MODE_KEYS = ["document", "spreadsheet", "key_value", "raw_text"]
+        self.MODE_ICONS = {
+            "document": ft.Icons.DESCRIPTION_OUTLINED,
+            "spreadsheet": ft.Icons.TABLE_CHART_OUTLINED,
+            "key_value": ft.Icons.LABEL_OUTLINED,
+            "raw_text": ft.Icons.NOTES_ROUNDED,
+        }
+        self.MODE_LABELS = {
+            "document": "Document",
+            "spreadsheet": "Spreadsheet",
+            "key_value": "Key-Value",
+            "raw_text": "Raw Text",
+        }
+        self.MODE_DESCRIPTIONS = {
+            "document": "Standard prose & headings",
+            "spreadsheet": "Invoices, tables & Excel TSV",
+            "key_value": "IDs, forms & key-value pairs",
+            "raw_text": "Unformatted continuous plain text",
+        }
+
+        initial_mode = state.active_output_mode
+        self.output_mode_icon = ft.Icon(
+            self.MODE_ICONS.get(initial_mode, ft.Icons.DESCRIPTION_OUTLINED),
+            size=14,
+            color=theme.accent,
+        )
+        self.output_mode_text = ft.Text(
+            f"Format: {self.MODE_LABELS.get(initial_mode, 'Document')}",
+            size=12,
+            weight=ft.FontWeight.W_500,
+            color=theme.text_primary,
+            font_family=FONT_FAMILY_UI,
+        )
+        self.output_mode_btn = ft.OutlinedButton(
+            content=ft.Row(
+                spacing=6,
+                tight=True,
+                controls=[
+                    self.output_mode_icon,
+                    self.output_mode_text,
+                ],
+            ),
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+                side=ft.BorderSide(1, theme.border),
+                padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+                bgcolor=theme.surface,
+            ),
+            on_click=self.cycle_output_mode,
+            tooltip="Click to toggle format: Document -> Spreadsheet -> Key-Value -> Raw Text",
+        )
+
         # Primary Action Button: 'Extract text'
         self.extract_progress = ft.ProgressRing(width=14, height=14, stroke_width=2, color="#FFFFFF", visible=False)
         self.extract_label = ft.Text(
@@ -333,7 +422,14 @@ class TextPanel(ft.Container):
                         self.export_btn,
                     ],
                 ),
-                self.extract_btn,
+                ft.Row(
+                    spacing=8,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    controls=[
+                        self.output_mode_btn,
+                        self.extract_btn,
+                    ],
+                ),
             ],
         )
 
@@ -387,13 +483,50 @@ class TextPanel(ft.Container):
             self.text_canvas.content = self.blocks_column
         safe_update(self)
 
-    def on_copy_block(self, block_text: str):
-        if block_text and self.page:
+    def cycle_output_mode(self, e):
+        curr = state.active_output_mode if state.active_output_mode in self.MODE_KEYS else "document"
+        curr_idx = self.MODE_KEYS.index(curr)
+        next_mode = self.MODE_KEYS[(curr_idx + 1) % len(self.MODE_KEYS)]
+        self.set_output_mode(next_mode)
+
+    def set_output_mode(self, mode: str):
+        state.set_active_output_mode(mode)
+        self.output_mode_icon.name = self.MODE_ICONS.get(mode, ft.Icons.DESCRIPTION_OUTLINED)
+        self.output_mode_text.value = f"Format: {self.MODE_LABELS.get(mode, 'Document')}"
+        safe_update(self.output_mode_btn)
+        p = get_page(self)
+        if p:
+            label = self.MODE_LABELS.get(mode, mode)
+            desc = self.MODE_DESCRIPTIONS.get(mode, "")
+            p.show_dialog(
+                ft.SnackBar(
+                    content=ft.Text(f"Format: {label} ({desc})", size=13, color=theme.text_primary),
+                    bgcolor=theme.glass_bg,
+                    duration=1800,
+                )
+            )
+
+    def on_copy_block(self, block_text: str, page=None):
+        p = page or get_page(self)
+        if not block_text:
+            return
+
+        is_table = state.active_output_mode == "spreadsheet" or ("|" in block_text and "\n|" in block_text)
+        if is_table:
+            tsv_data = text_to_tsv_string(block_text)
+            text_to_send = tsv_data if tsv_data else block_text
+            toast_msg = "Copied table (Excel-ready TSV)"
+        else:
+            text_to_send = block_text
+            toast_msg = "Copied paragraph"
+
+        copy_text_to_clipboard(text_to_send, page=p)
+
+        if p:
             try:
-                self.page.set_clipboard(block_text)
-                self.page.show_dialog(
+                p.show_dialog(
                     ft.SnackBar(
-                        content=ft.Text("Copied paragraph", size=13, weight=ft.FontWeight.W_500, color=theme.text_primary),
+                        content=ft.Text(toast_msg, size=13, weight=ft.FontWeight.W_500, color=theme.text_primary),
                         bgcolor=theme.glass_bg,
                         duration=1500,
                     )
@@ -402,16 +535,64 @@ class TextPanel(ft.Container):
                 pass
 
     def on_copy_all_click(self, e):
+        p = getattr(e, "page", None) or get_page(self) or getattr(getattr(e, "control", None), "page", None)
         item = state.selected_item
-        text_to_copy = self.raw_output_field.value or (item.extracted_text if item else "")
-        if text_to_copy and self.page:
+        text_to_copy = ""
+        if self.raw_output_field and self.raw_output_field.value:
+            text_to_copy = self.raw_output_field.value
+        elif item and item.extracted_text:
+            text_to_copy = item.extracted_text
+
+        if not text_to_copy:
+            if p:
+                try:
+                    p.show_dialog(
+                        ft.SnackBar(
+                            content=ft.Text("No extracted text to copy", size=13, color=theme.text_secondary),
+                            bgcolor=theme.glass_bg,
+                            duration=1800,
+                        )
+                    )
+                except Exception:
+                    pass
+            return
+
+        is_table = state.active_output_mode == "spreadsheet" or ("|" in text_to_copy and "\n|" in text_to_copy)
+        if is_table:
+            tsv_data = text_to_tsv_string(text_to_copy)
+            final_text = tsv_data if tsv_data else text_to_copy
+            toast_msg = "Copied (Spreadsheet TSV table ready for Excel/Sheets)"
+        else:
+            final_text = text_to_copy
+            toast_msg = "Copied to clipboard"
+
+        copy_text_to_clipboard(final_text, page=p)
+
+        # Inline button visual feedback
+        self.copy_icon.name = ft.Icons.CHECK_ROUNDED
+        self.copy_icon.color = "#10B981" if not theme.is_dark else "#34D399"
+        self.copy_text.value = "Copied!"
+        self.copy_text.color = "#10B981" if not theme.is_dark else "#34D399"
+        safe_update(self.copy_btn)
+
+        def _reset_btn():
+            time.sleep(1.5)
+            self.copy_icon.name = ft.Icons.CONTENT_COPY_ROUNDED
+            self.copy_icon.color = theme.text_primary
+            self.copy_text.value = "Copy all"
+            self.copy_text.color = theme.text_primary
+            safe_update(self.copy_btn)
+
+        import threading
+        threading.Thread(target=_reset_btn, daemon=True).start()
+
+        if p:
             try:
-                self.page.set_clipboard(text_to_copy)
-                self.page.show_dialog(
+                p.show_dialog(
                     ft.SnackBar(
-                        content=ft.Text("Copied", size=13, weight=ft.FontWeight.W_500, color=theme.text_primary),
+                        content=ft.Text(toast_msg, size=13, weight=ft.FontWeight.W_500, color=theme.text_primary),
                         bgcolor=theme.glass_bg,
-                        duration=1800,
+                        duration=2000,
                     )
                 )
             except Exception:
@@ -447,13 +628,15 @@ class TextPanel(ft.Container):
             )
 
     def on_export_click(self, e):
+        p = get_page(self)
+        if not p:
+            return
         item = state.selected_item
         text_content = self.raw_output_field.value or (item.extracted_text if item else "")
         if not text_content and not any(it.extracted_text for it in state.queue):
-            if self.page:
-                self.page.show_dialog(
-                    ft.SnackBar(content=ft.Text("No extracted text to export.", color=theme.text_primary), bgcolor=theme.glass_bg)
-                )
+            p.show_dialog(
+                ft.SnackBar(content=ft.Text("No extracted text to export.", color=theme.text_primary), bgcolor=theme.glass_bg)
+            )
             return
 
         def save_file(ext: str, content: str, filename_override: str = None):
@@ -467,9 +650,9 @@ class TextPanel(ft.Container):
             try:
                 with open(export_path, "w", encoding="utf-8") as f:
                     f.write(content)
-                self.page.pop_dialog()
+                p.pop_dialog()
                 folder_name = os.path.basename(target_dir) or target_dir
-                self.page.show_dialog(
+                p.show_dialog(
                     ft.SnackBar(
                         content=ft.Text(f"Saved {fname} to {folder_name}", size=13, color=theme.text_primary),
                         bgcolor=theme.glass_bg,
@@ -477,14 +660,14 @@ class TextPanel(ft.Container):
                     )
                 )
             except Exception as ex:
-                self.page.show_dialog(
+                p.show_dialog(
                     ft.SnackBar(content=ft.Text(f"Export failed: {str(ex)}"), bgcolor="#EF4444")
                 )
 
         def export_merged(ext: str):
             completed = [it for it in state.queue if it.extracted_text and it.extracted_text.strip()]
             if not completed:
-                self.page.show_dialog(
+                p.show_dialog(
                     ft.SnackBar(content=ft.Text("No completed documents with text in queue.", color=theme.text_primary), bgcolor=theme.glass_bg)
                 )
                 return
@@ -549,10 +732,10 @@ class TextPanel(ft.Container):
                 ],
             ),
             actions=[
-                ft.TextButton("Cancel", on_click=lambda ev: self.page.pop_dialog()),
+                ft.TextButton("Cancel", on_click=lambda ev: p.pop_dialog()),
             ],
         )
-        self.page.show_dialog(export_dialog)
+        p.show_dialog(export_dialog)
 
     def set_processing(self, is_processing: bool):
         self.extract_progress.visible = is_processing
@@ -635,6 +818,11 @@ class TextPanel(ft.Container):
 
         self.extract_btn.style.bgcolor = theme.accent
         self.extract_btn.style.side = ft.BorderSide(2, theme.accent)
+
+        self.output_mode_btn.style.bgcolor = theme.surface
+        self.output_mode_btn.style.side = ft.BorderSide(1, theme.border)
+        self.output_mode_icon.color = theme.accent
+        self.output_mode_text.color = theme.text_primary
 
         for block_ctrl in self.blocks_column.controls:
             if isinstance(block_ctrl, ParagraphBlock):

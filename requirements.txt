@@ -7,6 +7,8 @@ httpx==0.28.1
 idna==3.19
 msgpack==1.2.2
 oauthlib==3.3.1
+pillow==12.3.0
+pyperclip==1.11.0
 repath==0.9.0
 six==1.17.0
 typing_extensions==4.16.0

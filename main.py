@@ -36,6 +36,10 @@ def main(page: ft.Page):
     page.window.height = 860
     page.window.icon = "assets/app_icon.png"
 
+    # Initialize default output mode from saved user settings
+    initial_config = load_config()
+    state.active_output_mode = initial_config.get("default_output_mode", "document")
+
     file_picker = ft.FilePicker()
 
     # Modals
@@ -258,7 +262,9 @@ def main(page: ft.Page):
         page.update()
 
         try:
-            extracted = await extract_text_with_llm(item.file_path)
+            mode = state.active_output_mode
+            item.output_mode = mode
+            extracted = await extract_text_with_llm(item.file_path, mode=mode)
             item.extracted_text = extracted
             item.status = "Done"
             item.error_message = ""

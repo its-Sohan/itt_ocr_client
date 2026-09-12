@@ -61,6 +61,21 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
         dense=True,
     )
 
+    default_mode_dropdown = ft.Dropdown(
+        label="Default output format",
+        value=config.get("default_output_mode", "document"),
+        options=[
+            ft.dropdown.Option("document", "Document (Standard prose & layout)"),
+            ft.dropdown.Option("spreadsheet", "Spreadsheet (Invoices, tables, Excel TSV)"),
+            ft.dropdown.Option("key_value", "Key-Value (IDs, forms, certificates)"),
+            ft.dropdown.Option("raw_text", "Raw Text (Unformatted plain text)"),
+        ],
+        border_color=theme.border,
+        focused_border_color=theme.accent,
+        text_size=13,
+        dense=True,
+    )
+
     auto_extract_switch = ft.Switch(
         label="Auto-extract on ingest (drop, paste, scan)",
         value=config.get("auto_extract", True),
@@ -82,6 +97,7 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
         config["api_key"] = final_api_key
         config["base_url"] = final_base_url
         config["model_name"] = model_field.value.strip()
+        config["default_output_mode"] = default_mode_dropdown.value or "document"
         config["auto_extract"] = auto_extract_switch.value
         config["reduced_motion"] = reduced_motion_switch.value
         save_config(config)
@@ -291,6 +307,7 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
                 base_url_field,
                 credential_actions_row,
                 model_field,
+                default_mode_dropdown,
                 auto_extract_switch,
                 reduced_motion_switch,
                 ft.Row(

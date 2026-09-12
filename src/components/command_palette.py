@@ -1,6 +1,7 @@
 import flet as ft
 from src.styles import theme, RADIUS_GLASS, RADIUS_PANEL, FONT_FAMILY_UI
 from src.app_state import state
+from src.services.clipboard import copy_text_to_clipboard
 
 def create_command_palette(
     page: ft.Page,
@@ -55,6 +56,30 @@ def create_command_palette(
             "action": lambda: (page.pop_dialog(), on_scan_device(None) if on_scan_device else None),
         },
         {
+            "icon": ft.Icons.TABLE_CHART_OUTLINED,
+            "title": "Set mode: Spreadsheet",
+            "desc": "Switch OCR output format to tabular line items & Excel-ready tables",
+            "action": lambda: (page.pop_dialog(), state.set_active_output_mode("spreadsheet")),
+        },
+        {
+            "icon": ft.Icons.DESCRIPTION_OUTLINED,
+            "title": "Set mode: Document",
+            "desc": "Switch OCR output format to standard prose & paragraphs",
+            "action": lambda: (page.pop_dialog(), state.set_active_output_mode("document")),
+        },
+        {
+            "icon": ft.Icons.LABEL_OUTLINED,
+            "title": "Set mode: Key-Value",
+            "desc": "Switch OCR output format to structured field-value pairs",
+            "action": lambda: (page.pop_dialog(), state.set_active_output_mode("key_value")),
+        },
+        {
+            "icon": ft.Icons.NOTES_ROUNDED,
+            "title": "Set mode: Raw Text",
+            "desc": "Switch OCR output format to clean unformatted plain text",
+            "action": lambda: (page.pop_dialog(), state.set_active_output_mode("raw_text")),
+        },
+        {
             "icon": ft.Icons.CONTENT_COPY_ROUNDED,
             "title": "Copy extracted text",
             "desc": "Copy active transcription to system clipboard",
@@ -91,13 +116,28 @@ def create_command_palette(
     def _copy_active_text(p: ft.Page):
         item = state.selected_item
         if item and item.extracted_text:
-            p.set_clipboard(item.extracted_text)
-            p.show_dialog(
-                ft.SnackBar(
-                    content=ft.Text("Copied", size=13, weight=ft.FontWeight.W_500, color=theme.text_primary),
-                    bgcolor=theme.glass_bg,
+            copy_text_to_clipboard(item.extracted_text, page=p)
+            try:
+                p.show_dialog(
+                    ft.SnackBar(
+                        content=ft.Text("Copied to clipboard", size=13, weight=ft.FontWeight.W_500, color=theme.text_primary),
+                        bgcolor=theme.glass_bg,
+                        duration=1500,
+                    )
                 )
-            )
+            except Exception:
+                pass
+        elif p:
+            try:
+                p.show_dialog(
+                    ft.SnackBar(
+                        content=ft.Text("No extracted text to copy", size=13, color=theme.text_secondary),
+                        bgcolor=theme.glass_bg,
+                        duration=1500,
+                    )
+                )
+            except Exception:
+                pass
 
     def render_command_item(cmd):
         return ft.Container(

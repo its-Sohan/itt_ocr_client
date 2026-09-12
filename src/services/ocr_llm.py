@@ -6,13 +6,60 @@ from src.styles import safe_bengali_normalize
 
 # Developer-configured internal OCR System Prompt
 # Stays strictly within code; cannot be viewed or altered by end-users in UI settings.
-OCR_SYSTEM_PROMPT = (
+OCR_BASE_PROMPT = (
     "You are an expert high-precision OCR and document transcription engine. "
     "Transcribe all visible text, handwritten notes, numbers, tables, and punctuation from this image accurately. "
-    "Maintain all structural elements such as headings, lists, tables, and paragraphs where applicable. "
     "Support multilingual scripts including English, Bengali (বাংলা), Assamese, Hindi, and others accurately with correct conjuncts and diacritics. "
     "Output clean text or Markdown only without introductory pleasantries or commentary."
 )
+
+OUTPUT_MODES = {
+    "document": {
+        "label": "Document",
+        "description": "Standard prose, headings & paragraphs",
+        "system_instruction": (
+            "Preserve structural elements such as headings, lists, tables, and paragraphs where applicable. "
+            "Maintain natural reading order and document hierarchy."
+        ),
+        "user_prompt": "Please transcribe and extract all text and layout elements present in this image preserving original structure.",
+    },
+    "spreadsheet": {
+        "label": "Spreadsheet",
+        "description": "Itemized tables, invoices & receipts (Excel ready)",
+        "system_instruction": (
+            "You are a specialized financial and tabular document extractor. "
+            "Identify all tables, itemized billing rows, quantities, rates, unit prices, descriptions, and numerical totals. "
+            "Format all tabular sections strictly as clean Markdown tables with header rows (`| Col 1 | Col 2 |`) so they can be exported to CSV or pasted into Excel. "
+            "For non-table document metadata (such as invoice number, date, vendor name, buyer name, total amount), format them as a concise 2-column key-value table (`| Field | Value |`). "
+            "Do NOT merge separate columns into combined text paragraphs."
+        ),
+        "user_prompt": "Extract all tabular data, line items, and document metadata from this image strictly into formatted tables suitable for spreadsheets.",
+    },
+    "key_value": {
+        "label": "Key-Value Form",
+        "description": "Structured label-value pairs (IDs, forms, certificates)",
+        "system_instruction": (
+            "You are a structured data and form extractor. "
+            "Extract every form field, label, identifier, and value present in the image. "
+            "Format strictly as clean key-value pairs (`Field Name: Value`). "
+            "Group related fields under concise markdown headings. "
+            "Do not output conversational commentary."
+        ),
+        "user_prompt": "Extract all form fields, labels, and corresponding values from this image as structured key-value pairs.",
+    },
+    "raw_text": {
+        "label": "Raw Text",
+        "description": "Clean continuous unformatted text",
+        "system_instruction": (
+            "You are a pure OCR transcription engine. "
+            "Transcribe all text in natural reading order. "
+            "Output pure plain text only with zero markdown formatting, zero table pipes, zero bold asterisks, and zero commentary."
+        ),
+        "user_prompt": "Transcribe all text from this image as raw unformatted plain text.",
+    },
+}
+
+OCR_SYSTEM_PROMPT = OCR_BASE_PROMPT
 
 def get_mime_type(file_path: str) -> str:
     ext = os.path.splitext(file_path)[1].lower()
@@ -32,9 +79,9 @@ def encode_image_base64(file_path: str) -> str:
     with open(file_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
-async def extract_text_with_llm(file_path: str) -> str:
+async def extract_text_with_llm(file_path: str, mode: str = "document") -> str:
     """
-    Sends the image to an OpenAI-compatible vision endpoint
+    Sends the image to an OpenAI-compatible vision endpoint with mode-specific instructions
     (supports OpenAI GPT-4o, OpenRouter, Groq, Ollama, Gemini API compatible, etc.)
     """
     config = load_config()
@@ -67,19 +114,23 @@ async def extract_text_with_llm(file_path: str) -> str:
         headers["HTTP-Referer"] = "https://github.com/its-Sohan/itt_ocr_client"
         headers["X-Title"] = "ITT OCR Client"
 
+    mode_info = OUTPUT_MODES.get(mode, OUTPUT_MODES["document"])
+    effective_system_prompt = f"{OCR_BASE_PROMPT}\n\n[OUTPUT FORMAT DIRECTIVE: {mode_info['label'].upper()}]\n{mode_info['system_instruction']}"
+    user_instruction = mode_info["user_prompt"]
+
     payload = {
         "model": model_name,
         "messages": [
             {
                 "role": "system",
-                "content": OCR_SYSTEM_PROMPT
+                "content": effective_system_prompt,
             },
             {
                 "role": "user",
                 "content": [
                     {
                         "type": "text",
-                        "text": "Please transcribe and extract all text and tabular data present in this image."
+                        "text": user_instruction,
                     },
                     {
                         "type": "image_url",
