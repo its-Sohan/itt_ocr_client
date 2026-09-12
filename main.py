@@ -1,7 +1,7 @@
 import asyncio
 import os
 import flet as ft
-from src.styles import theme, FONT_FAMILY_UI
+from src.styles import theme, FONT_FAMILY_UI, RADIUS_GLASS, RADIUS_PANEL
 from src.app_state import state
 from src.components.top_bar import create_top_bar
 from src.components.sidebar import create_sidebar
@@ -80,39 +80,153 @@ def main(page: ft.Page):
     def on_browse_files(e):
         page.run_task(on_browse_files_async, e)
 
+    def show_no_scanner_modal(detail: str = ""):
+        def on_browse_from_modal(ev):
+            page.pop_dialog()
+            on_browse_files(None)
+
+        def on_retry_scan(ev):
+            page.pop_dialog()
+            on_scan_device(None)
+
+        def on_open_wfs(ev):
+            try:
+                import subprocess
+                subprocess.Popen(["wfs.exe"], shell=True)
+            except Exception:
+                pass
+
+        dialog_content = ft.Container(
+            width=480,
+            bgcolor=theme.glass_bg,
+            blur=theme.glass_blur,
+            border=theme.glass_border,
+            border_radius=RADIUS_GLASS,
+            shadow=theme.glass_shadow,
+            padding=20,
+            content=ft.Column(
+                tight=True,
+                spacing=14,
+                controls=[
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        controls=[
+                            ft.Row(
+                                spacing=8,
+                                controls=[
+                                    ft.Icon(ft.Icons.DOCUMENT_SCANNER_ROUNDED, size=20, color=theme.accent),
+                                    ft.Text(
+                                        "Scanner device not detected",
+                                        size=15,
+                                        weight=ft.FontWeight.W_600,
+                                        color=theme.text_primary,
+                                        font_family=FONT_FAMILY_UI,
+                                    ),
+                                ],
+                            ),
+                            ft.IconButton(
+                                icon=ft.Icons.CLOSE_ROUNDED,
+                                icon_size=16,
+                                icon_color=theme.text_secondary,
+                                on_click=lambda ev: page.pop_dialog(),
+                            ),
+                        ],
+                    ),
+                    ft.Text(
+                        "Windows could not detect an active physical scanner or WIA imaging device.",
+                        size=13,
+                        color=theme.text_primary,
+                        font_family=FONT_FAMILY_UI,
+                    ),
+                    ft.Container(
+                        bgcolor=theme.surface,
+                        border=ft.Border.all(1, theme.border),
+                        border_radius=RADIUS_PANEL,
+                        padding=ft.Padding.symmetric(horizontal=14, vertical=10),
+                        content=ft.Column(
+                            spacing=6,
+                            controls=[
+                                ft.Text("• Connect and turn on your scanner via USB or Wi-Fi.", size=12, color=theme.text_secondary, font_family=FONT_FAMILY_UI),
+                                ft.Text("• Ensure official Windows WIA / scanner drivers are installed.", size=12, color=theme.text_secondary, font_family=FONT_FAMILY_UI),
+                                ft.Text("• Or select any scanned document (PNG, JPG, WebP, PDF) from your files.", size=12, color=theme.text_secondary, font_family=FONT_FAMILY_UI),
+                            ],
+                        ),
+                    ),
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            ft.TextButton(
+                                "Open Windows Fax & Scan",
+                                style=ft.ButtonStyle(color=theme.text_secondary, padding=ft.Padding.all(0)),
+                                on_click=on_open_wfs,
+                                tooltip="Launch native Windows Fax and Scan app (wfs.exe)",
+                            ),
+                            ft.Row(
+                                spacing=8,
+                                controls=[
+                                    ft.TextButton(
+                                        "Retry scan",
+                                        style=ft.ButtonStyle(
+                                            color=theme.text_secondary,
+                                            shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+                                        ),
+                                        on_click=on_retry_scan,
+                                    ),
+                                    ft.ElevatedButton(
+                                        "Browse scanned file",
+                                        style=ft.ButtonStyle(
+                                            bgcolor=theme.accent,
+                                            color="#FFFFFF",
+                                            shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+                                            padding=ft.Padding.symmetric(horizontal=14, vertical=10),
+                                            side=ft.BorderSide(2, theme.accent),
+                                        ),
+                                        on_click=on_browse_from_modal,
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+
+        modal = ft.AlertDialog(
+            modal=True,
+            bgcolor="transparent",
+            shape=ft.RoundedRectangleBorder(radius=RADIUS_GLASS),
+            content_padding=0,
+            content=dialog_content,
+        )
+        page.show_dialog(modal)
+
     def on_scan_device(e):
         try:
-            page.show_dialog(
-                ft.SnackBar(
-                    content=ft.Text("Scanning document from hardware device...", color=theme.text_primary),
-                    bgcolor=theme.glass_bg,
-                    duration=2000,
-                )
-            )
-            scanned_path = scan_document()
-            if scanned_path and os.path.exists(scanned_path):
-                state.add_item(scanned_path, source="scanner")
+            status, result = scan_document()
+            if status == "SUCCESS" and result and os.path.exists(result):
+                state.add_item(result, source="scanner")
                 page.show_dialog(
                     ft.SnackBar(
-                        content=ft.Text(f"Added {os.path.basename(scanned_path)} to queue", color=theme.text_primary),
+                        content=ft.Text(f"Added scanned document: {os.path.basename(result)}", color=theme.text_primary),
                         bgcolor=theme.glass_bg,
-                        duration=2000,
+                        duration=2500,
                     )
                 )
+            elif status == "CANCELLED":
+                page.show_dialog(
+                    ft.SnackBar(
+                        content=ft.Text("Scan cancelled", color=theme.text_secondary),
+                        bgcolor=theme.glass_bg,
+                        duration=1500,
+                    )
+                )
+            elif status == "NO_DEVICE":
+                show_no_scanner_modal(result or "")
             else:
-                page.show_dialog(
-                    ft.SnackBar(
-                        content=ft.Text("Scan produced no image.", color=theme.text_secondary),
-                        bgcolor=theme.glass_bg,
-                    )
-                )
+                show_no_scanner_modal(result or "Scanner error")
         except Exception as ex:
-            page.show_dialog(
-                ft.SnackBar(
-                    content=ft.Text(f"Scan error: {str(ex)}"),
-                    bgcolor="#EF4444",
-                )
-            )
+            show_no_scanner_modal(str(ex))
 
     # OCR Extraction Handler
     async def extract_item_async(item):

@@ -61,17 +61,6 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
         dense=True,
     )
 
-    system_prompt_field = ft.TextField(
-        label="OCR system prompt",
-        value=config.get("system_prompt", ""),
-        multiline=True,
-        min_lines=2,
-        max_lines=3,
-        border_color=theme.border,
-        focused_border_color=theme.accent,
-        text_size=12,
-    )
-
     reduced_motion_switch = ft.Switch(
         label="Reduce motion",
         value=theme.reduced_motion,
@@ -87,7 +76,6 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
         config["api_key"] = final_api_key
         config["base_url"] = final_base_url
         config["model_name"] = model_field.value.strip()
-        config["system_prompt"] = system_prompt_field.value.strip()
         config["reduced_motion"] = reduced_motion_switch.value
         save_config(config)
         theme.set_reduced_motion(reduced_motion_switch.value)
@@ -296,7 +284,6 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
                 base_url_field,
                 credential_actions_row,
                 model_field,
-                system_prompt_field,
                 reduced_motion_switch,
                 ft.Row(
                     alignment=ft.MainAxisAlignment.END,

@@ -4,6 +4,16 @@ import httpx
 from src.config_store import load_config, update_usage_stats
 from src.styles import safe_bengali_normalize
 
+# Developer-configured internal OCR System Prompt
+# Stays strictly within code; cannot be viewed or altered by end-users in UI settings.
+OCR_SYSTEM_PROMPT = (
+    "You are an expert high-precision OCR and document transcription engine. "
+    "Transcribe all visible text, handwritten notes, numbers, tables, and punctuation from this image accurately. "
+    "Maintain all structural elements such as headings, lists, tables, and paragraphs where applicable. "
+    "Support multilingual scripts including English, Bengali (বাংলা), Assamese, Hindi, and others accurately with correct conjuncts and diacritics. "
+    "Output clean text or Markdown only without introductory pleasantries or commentary."
+)
+
 def get_mime_type(file_path: str) -> str:
     ext = os.path.splitext(file_path)[1].lower()
     if ext in (".png",):
@@ -37,7 +47,6 @@ async def extract_text_with_llm(file_path: str) -> str:
         url = f"{clean_base}/chat/completions"
 
     model_name = config.get("model_name", "gpt-4o-mini").strip()
-    system_prompt = config.get("system_prompt", "Extract all visible text from this image accurately.")
 
     if not api_key and "localhost" not in clean_base and "127.0.0.1" not in clean_base:
         raise ValueError("API Key is missing. Please configure your API Key in Settings.")
@@ -63,7 +72,7 @@ async def extract_text_with_llm(file_path: str) -> str:
         "messages": [
             {
                 "role": "system",
-                "content": system_prompt
+                "content": OCR_SYSTEM_PROMPT
             },
             {
                 "role": "user",

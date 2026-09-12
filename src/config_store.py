@@ -10,7 +10,6 @@ DEFAULT_CONFIG = {
     "api_key": "",
     "base_url": "https://api.openai.com/v1",
     "model_name": "gpt-4o-mini",
-    "system_prompt": "You are an expert OCR engine. Extract and transcribe all visible text from the image accurately. Maintain all structural elements such as headings, lists, tables, and paragraphs where applicable. Output clean text or Markdown only without introductory pleasantries or commentary.",
     "usage_stats": {
         "total_scanned_or_uploaded": 0,
         "total_processed": 0,
