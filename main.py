@@ -425,14 +425,19 @@ def main(page: ft.Page):
 
     theme.add_listener(on_theme_change)
 
-    # Responsive breakpoint handling (< 768px)
+    # Responsive breakpoint handling
     def on_page_resize(e):
         width = page.width or 1200
         if width < 768:
-            # Narrow screen: collapse history by default, stack canvas and text panel
+            # Very narrow screen: collapse history and stack canvas + text panel
             if sidebar_comp.visible:
                 sidebar_comp.visible = False
             main_panel_comp.set_stacked(True)
+        elif width < 980:
+            # Medium-narrow: collapse history rail to give side-by-side workspace ample room
+            if sidebar_comp.visible:
+                sidebar_comp.visible = False
+            main_panel_comp.set_stacked(False)
         else:
             main_panel_comp.set_stacked(False)
         page.update()

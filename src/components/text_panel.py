@@ -251,7 +251,7 @@ class TextPanel(ft.Container):
         )
 
         self.char_count_text = ft.Text(
-            "0 characters",
+            "0 chars",
             size=12,
             color=theme.text_secondary,
             font_family=FONT_FAMILY_UI,
@@ -493,15 +493,20 @@ class TextPanel(ft.Container):
         header_row = ft.Row(
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            wrap=True,
+            run_spacing=6,
+            spacing=8,
             controls=[
                 ft.Row(
-                    spacing=10,
+                    spacing=8,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    tight=True,
                     controls=[self.header_title, self.char_count_text, self.math_chip],
                 ),
                 ft.Row(
                     spacing=8,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    tight=True,
                     controls=[
                         self.status_label,
                         self.extract_btn,
@@ -564,7 +569,7 @@ class TextPanel(ft.Container):
         if item:
             item.extracted_text = self.raw_output_field.value
             self.markdown_output_view.value = item.extracted_text
-            self.char_count_text.value = f"{len(item.extracted_text):,} characters"
+            self.char_count_text.value = f"{len(item.extracted_text):,} chars"
             is_bengali = contains_bengali(item.extracted_text)
             self.raw_output_field.text_style.font_family = FONT_FAMILY_BENGALI if is_bengali else FONT_FAMILY_MONO
             self.raw_output_field.text_size = 14 if is_bengali else 13
@@ -730,7 +735,7 @@ class TextPanel(ft.Container):
             state.persist()
             state.notify()
         else:
-            self.char_count_text.value = f"{len(new_text):,} characters"
+            self.char_count_text.value = f"{len(new_text):,} chars"
             self._rebuild_blocks(new_text)
             self._update_math_status(new_text)
             safe_update(self)
@@ -1336,8 +1341,8 @@ class TextPanel(ft.Container):
     def update_text_view(self):
         item = state.selected_item
         if not item:
-            self.char_count_text.value = "0 characters"
-            self.status_label.value = "No document loaded"
+            self.char_count_text.value = "0 chars"
+            self.status_label.value = "Ready"
             self.status_label.color = theme.text_secondary
             self.raw_output_field.value = ""
             self.markdown_output_view.value = "*Drop an image or PDF here to extract its text.*"
@@ -1346,7 +1351,7 @@ class TextPanel(ft.Container):
             return
 
         text = item.extracted_text or ""
-        self.char_count_text.value = f"{len(text):,} characters"
+        self.char_count_text.value = f"{len(text):,} chars"
         is_bengali = contains_bengali(text)
         self.raw_output_field.text_style.font_family = FONT_FAMILY_BENGALI if is_bengali else FONT_FAMILY_MONO
         self.raw_output_field.text_size = 14 if is_bengali else 13
