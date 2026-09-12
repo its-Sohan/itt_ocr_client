@@ -5,11 +5,16 @@ from src.styles import (
     FONT_FAMILY_UI,
     FONT_FAMILY_MONO,
     FONT_FAMILY_BENGALI,
+    TEXT_SM,
+    TEXT_MD,
+    SPACE_SM,
+    SPACE_MD,
     contains_bengali,
     safe_update,
     unfreeze,
 )
-from src.app_state import state
+from src.app_state import state, QUALITY_MODELS
+from src.config_store import load_config, save_config
 from src.services.clipboard import copy_text_to_clipboard
 from src.services.text_transforms import (
     convert_digits_to_english,
@@ -238,28 +243,64 @@ class TextPanel(ft.Container):
         # View modes: "blocks", "raw", "markdown"
         self.view_mode = "blocks"
 
-        # Header labels
+        # Header labels — premium hierarchy to match preview panel.
+        self.eyebrow = ft.Text(
+            "03  ·  OUTPUT",
+            size=10,
+            weight=ft.FontWeight.W_600,
+            color=theme.text_secondary,
+            font_family=FONT_FAMILY_UI,
+        )
         self.header_title = ft.Text(
             "Extracted text",
-            size=14,
-            weight=ft.FontWeight.W_500,
+            size=13,
+            weight=ft.FontWeight.W_600,
             color=theme.text_primary,
             font_family=FONT_FAMILY_UI,
+            max_lines=1,
+            overflow=ft.TextOverflow.ELLIPSIS,
+            expand=True,
         )
 
         self.char_count_text = ft.Text(
             "0 chars",
-            size=12,
-            color=theme.text_secondary,
-            font_family=FONT_FAMILY_UI,
-        )
-
-        self.status_label = ft.Text(
-            "Ready",
-            size=12,
+            size=11,
             weight=ft.FontWeight.W_500,
             color=theme.text_secondary,
             font_family=FONT_FAMILY_UI,
+        )
+        self.char_pill = ft.Container(
+            content=self.char_count_text,
+            bgcolor=theme.inset,
+            border=ft.Border.all(1, theme.border),
+            border_radius=20,
+            padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+        )
+
+        self.status_dot = ft.Container(
+            width=8,
+            height=8,
+            border_radius=4,
+            bgcolor=theme.text_secondary,
+        )
+        self.status_label = ft.Text(
+            "Ready",
+            size=11,
+            weight=ft.FontWeight.W_600,
+            color=theme.text_secondary,
+            font_family=FONT_FAMILY_UI,
+        )
+        self.status_pill = ft.Container(
+            content=ft.Row(
+                spacing=6,
+                tight=True,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[self.status_dot, self.status_label],
+            ),
+            bgcolor=theme.inset,
+            border=ft.Border.all(1, theme.border),
+            border_radius=20,
+            padding=ft.Padding.symmetric(horizontal=10, vertical=4),
         )
 
         # Local format transforms undo stack
@@ -327,49 +368,52 @@ class TextPanel(ft.Container):
             content=self.blocks_column,
         )
 
-        # 1. Copy All icon button
-        self.copy_icon = ft.Icon(ft.Icons.CONTENT_COPY_ROUNDED, size=16, color=theme.text_primary)
-        self.copy_text = ft.Text("Copy all", visible=False)
+        # 1. Copy All — labeled (was icon-only, ambiguous)
+        self.copy_icon = ft.Icon(ft.Icons.CONTENT_COPY_ROUNDED, size=15, color=theme.text_primary)
+        self.copy_text = ft.Text("Copy", size=11, weight=ft.FontWeight.W_500, color=theme.text_primary, font_family=FONT_FAMILY_UI)
         self.copy_btn = ft.Container(
-            content=self.copy_icon,
-            width=36,
+            content=ft.Row(spacing=6, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self.copy_icon, self.copy_text]),
             height=34,
             alignment=ft.Alignment.CENTER,
             border=ft.Border.all(1, theme.border),
             border_radius=RADIUS_PANEL,
             bgcolor=theme.button_bg,
+            padding=ft.Padding.symmetric(horizontal=10, vertical=0),
             ink=True,
             on_click=self.on_copy_all_click,
             tooltip="Copy all text (Ctrl+C)",
+            animate_scale=150,
         )
 
-        # 2. Export icon button
-        self.export_icon = ft.Icon(ft.Icons.DOWNLOAD_ROUNDED, size=16, color=theme.text_primary)
-        self.export_text = ft.Text("Export", visible=False)
+        # 2. Export — labeled
+        self.export_icon = ft.Icon(ft.Icons.DOWNLOAD_ROUNDED, size=15, color=theme.text_primary)
+        self.export_text = ft.Text("Export", size=11, weight=ft.FontWeight.W_500, color=theme.text_primary, font_family=FONT_FAMILY_UI)
         self.export_btn = ft.Container(
-            content=self.export_icon,
-            width=36,
+            content=ft.Row(spacing=6, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self.export_icon, self.export_text]),
             height=34,
             alignment=ft.Alignment.CENTER,
             border=ft.Border.all(1, theme.border),
             border_radius=RADIUS_PANEL,
             bgcolor=theme.button_bg,
+            padding=ft.Padding.symmetric(horizontal=10, vertical=0),
             ink=True,
             on_click=self.on_export_click,
             tooltip="Export extracted text to file",
+            animate_scale=150,
         )
 
-        # 3. Local Formatting & Tools Menu icon button
-        self.tools_icon = ft.Icon(ft.Icons.TUNE_ROUNDED, size=16, color=theme.text_primary)
-        self.tools_text = ft.Text("Tools", visible=False)
+        # 3. Local Formatting & Tools Menu — labeled
+        self.tools_icon = ft.Icon(ft.Icons.TUNE_ROUNDED, size=15, color=theme.text_primary)
+        self.tools_text = ft.Text("Tools", size=11, weight=ft.FontWeight.W_500, color=theme.text_primary, font_family=FONT_FAMILY_UI)
         self.tools_container = ft.Container(
-            content=self.tools_icon,
-            width=36,
+            content=ft.Row(spacing=6, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self.tools_icon, self.tools_text]),
             height=34,
             alignment=ft.Alignment.CENTER,
             border=ft.Border.all(1, theme.border),
             border_radius=RADIUS_PANEL,
             bgcolor=theme.button_bg,
+            padding=ft.Padding.symmetric(horizontal=10, vertical=0),
+            animate_scale=150,
         )
         self.tools_menu_btn = ft.PopupMenuButton(
             content=self.tools_container,
@@ -379,44 +423,46 @@ class TextPanel(ft.Container):
             items=self._build_tools_menu_items(),
         )
 
-        # 4. Side-by-Side Audit Mode Toggle icon button
+        # 4. Side-by-Side Audit Mode Toggle — labeled
         self.audit_icon = ft.Icon(
             ft.Icons.SAVED_SEARCH_ROUNDED if state.audit_mode else ft.Icons.FIND_IN_PAGE_OUTLINED,
-            size=16,
+            size=15,
             color=theme.accent if state.audit_mode else theme.text_primary,
         )
-        self.audit_text = ft.Text("Audit: ON" if state.audit_mode else "Audit: OFF", visible=False)
+        self.audit_text = ft.Text("Audit", size=11, weight=ft.FontWeight.W_500, color=theme.accent if state.audit_mode else theme.text_primary, font_family=FONT_FAMILY_UI)
         audit_init_bg = (
             "rgba(37, 99, 235, 0.10)" if (state.audit_mode and not theme.is_dark)
             else ("rgba(75, 136, 240, 0.16)" if state.audit_mode else theme.button_bg)
         )
         self.audit_btn = ft.Container(
-            content=self.audit_icon,
-            width=36,
+            content=ft.Row(spacing=6, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self.audit_icon, self.audit_text]),
             height=34,
             alignment=ft.Alignment.CENTER,
             border=ft.Border.all(1.5 if state.audit_mode else 1, theme.accent if state.audit_mode else theme.border),
             border_radius=RADIUS_PANEL,
             bgcolor=audit_init_bg,
+            padding=ft.Padding.symmetric(horizontal=10, vertical=0),
             ink=True,
             on_click=self.toggle_audit_mode,
             tooltip=f"Side-by-Side Audit Mode: {'ON' if state.audit_mode else 'OFF'} (Alt+A)",
+            animate_scale=150,
         )
 
-        # 5. View Mode Toggle icon button (Blocks / Raw / Markdown)
-        self.view_mode_icon = ft.Icon(ft.Icons.VIEW_AGENDA_OUTLINED, size=16, color=theme.text_primary)
-        self.mode_label = ft.Text("View: Blocks", visible=False)
+        # 5. View Mode Toggle — labeled (Blocks / Raw / Markdown)
+        self.view_mode_icon = ft.Icon(ft.Icons.VIEW_AGENDA_OUTLINED, size=15, color=theme.text_primary)
+        self.mode_label = ft.Text("Blocks", size=11, weight=ft.FontWeight.W_500, color=theme.text_primary, font_family=FONT_FAMILY_UI)
         self.view_mode_btn = ft.Container(
-            content=self.view_mode_icon,
-            width=36,
+            content=ft.Row(spacing=6, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self.view_mode_icon, self.mode_label]),
             height=34,
             alignment=ft.Alignment.CENTER,
             border=ft.Border.all(1, theme.border),
             border_radius=RADIUS_PANEL,
             bgcolor=theme.button_bg,
+            padding=ft.Padding.symmetric(horizontal=10, vertical=0),
             ink=True,
             on_click=self.cycle_view_mode,
             tooltip="View mode: Blocks (Click to cycle Raw/Markdown)",
+            animate_scale=150,
         )
 
         # 6. Output Mode Toggle icon button
@@ -443,27 +489,49 @@ class TextPanel(ft.Container):
         initial_mode = state.active_output_mode
         self.output_mode_icon = ft.Icon(
             self.MODE_ICONS.get(initial_mode, ft.Icons.DESCRIPTION_OUTLINED),
-            size=16,
+            size=15,
             color=theme.accent,
         )
         self.output_mode_text = ft.Text(
-            f"Format: {self.MODE_LABELS.get(initial_mode, 'Document')}",
-            visible=False,
+            self.MODE_LABELS.get(initial_mode, 'Document'),
+            size=11,
+            weight=ft.FontWeight.W_500,
+            color=theme.text_primary,
+            font_family=FONT_FAMILY_UI,
         )
         self.output_mode_btn = ft.Container(
-            content=self.output_mode_icon,
-            width=36,
+            content=ft.Row(spacing=6, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=[self.output_mode_icon, self.output_mode_text]),
             height=34,
             alignment=ft.Alignment.CENTER,
             border=ft.Border.all(1, theme.border),
             border_radius=RADIUS_PANEL,
             bgcolor=theme.button_bg,
+            padding=ft.Padding.symmetric(horizontal=10, vertical=0),
             ink=True,
             on_click=self.cycle_output_mode,
             tooltip=f"Format: {self.MODE_LABELS.get(initial_mode, 'Document')} (Click to cycle)",
+            animate_scale=150,
         )
 
-        # Primary Action Button: 'Extract text' (prominently in top header)
+        # Quality selector: Standard (fast) vs High (accurate). Sits left of
+        # Extract so Extract stays the far-right primary CTA in this tile.
+        self.quality_dropdown = ft.Dropdown(
+            value=state.active_quality if state.active_quality in QUALITY_MODELS else "standard",
+            options=[
+                ft.dropdown.Option("standard", "Standard"),
+                ft.dropdown.Option("high", "High"),
+            ],
+            width=118,
+            dense=True,
+            text_size=11,
+            border_color=theme.border,
+            focused_border_color=theme.accent,
+            content_padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+            tooltip=f"Standard: {QUALITY_MODELS['standard']} (fast)  ·  High: {QUALITY_MODELS['high']} (accurate)",
+            on_select=self._on_quality_change,
+        )
+
+        # Primary Action Button: 'Extract text' (far-right in top header)
         self.extract_progress = ft.ProgressRing(width=13, height=13, stroke_width=2, color="#FFFFFF", visible=False)
         self.extract_icon = ft.Icon(ft.Icons.PLAY_ARROW_ROUNDED, size=15, color="#FFFFFF")
         self.extract_label = ft.Text("Extract text", size=12, weight=ft.FontWeight.W_600, color="#FFFFFF", font_family=FONT_FAMILY_UI)
@@ -487,25 +555,23 @@ class TextPanel(ft.Container):
             tooltip="Extract text from document (Ctrl+Enter)",
         )
 
-        header_row = ft.Row(
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            wrap=True,
-            run_spacing=6,
-            spacing=8,
+        # Single-line header: title + chars + quality + Extract (status pill
+        # removed per request — logic kept, control hidden so paint calls stay safe).
+        self.status_pill.visible = False
+        header_row = ft.Column(
+            spacing=4,
             controls=[
+                self.eyebrow,
                 ft.Row(
-                    spacing=8,
+                    alignment=ft.MainAxisAlignment.START,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    tight=True,
-                    controls=[self.header_title, self.char_count_text, self.math_chip],
-                ),
-                ft.Row(
-                    spacing=8,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    tight=True,
+                    wrap=False,
+                    spacing=6,
                     controls=[
-                        self.status_label,
+                        self.header_title,
+                        self.char_pill,
+                        self.math_chip,
+                        self.quality_dropdown,
                         self.extract_btn,
                     ],
                 ),
@@ -865,7 +931,7 @@ class TextPanel(ft.Container):
         p = getattr(e, "page", None) or get_page(self)
         if self.view_mode == "blocks":
             self.view_mode = "raw"
-            self.mode_label.value = "View: Raw"
+            self.mode_label.value = "Raw"
             self.view_mode_icon.icon = ft.Icons.CODE_ROUNDED
             self.view_mode_icon.name = ft.Icons.CODE_ROUNDED
             self.view_mode_btn.tooltip = "View mode: Raw Editor (Click to switch to Markdown)"
@@ -873,7 +939,7 @@ class TextPanel(ft.Container):
             toast_text = "Switched to Raw Text editor"
         elif self.view_mode == "raw":
             self.view_mode = "markdown"
-            self.mode_label.value = "View: Markdown"
+            self.mode_label.value = "Markdown"
             self.view_mode_icon.icon = ft.Icons.PREVIEW_ROUNDED
             self.view_mode_icon.name = ft.Icons.PREVIEW_ROUNDED
             self.view_mode_btn.tooltip = "View mode: Markdown Preview (Click to switch to Blocks)"
@@ -881,13 +947,12 @@ class TextPanel(ft.Container):
             toast_text = "Switched to Markdown preview"
         else:
             self.view_mode = "blocks"
-            self.mode_label.value = "View: Blocks"
+            self.mode_label.value = "Blocks"
             self.view_mode_icon.icon = ft.Icons.VIEW_AGENDA_OUTLINED
             self.view_mode_icon.name = ft.Icons.VIEW_AGENDA_OUTLINED
             self.view_mode_btn.tooltip = "View mode: Interactive Blocks (Click to switch to Raw)"
             self.text_canvas.content = self.blocks_column
             toast_text = "Switched to Interactive Blocks"
-        self.view_mode_btn.content = self.view_mode_icon
         safe_update(self.view_mode_icon)
         safe_update(self.view_mode_btn)
         safe_update(self.text_canvas)
@@ -909,10 +974,9 @@ class TextPanel(ft.Container):
         self._update_audit_btn_ui(new_state)
         if new_state and self.view_mode != "blocks":
             self.view_mode = "blocks"
-            self.mode_label.value = "View: Blocks"
+            self.mode_label.value = "Blocks"
             self.view_mode_icon.icon = ft.Icons.VIEW_AGENDA_OUTLINED
             self.view_mode_icon.name = ft.Icons.VIEW_AGENDA_OUTLINED
-            self.view_mode_btn.content = self.view_mode_icon
             self.view_mode_btn.tooltip = "View mode: Interactive Blocks (Click to switch to Raw)"
             self.text_canvas.content = self.blocks_column
             safe_update(self.view_mode_icon)
@@ -935,7 +999,7 @@ class TextPanel(ft.Container):
         self.audit_icon.icon = icon_name
         self.audit_icon.name = icon_name
         self.audit_icon.color = theme.accent if is_on else theme.text_primary
-        self.audit_text.value = f"Audit: {'ON' if is_on else 'OFF'}"
+        self.audit_text.value = "Audit On" if is_on else "Audit"
         self.audit_text.color = theme.accent if is_on else theme.text_primary
         self.audit_btn.bgcolor = (
             "rgba(37, 99, 235, 0.10)" if (is_on and not theme.is_dark)
@@ -943,7 +1007,6 @@ class TextPanel(ft.Container):
         )
         self.audit_btn.border = ft.Border.all(1.5 if is_on else 1, theme.accent if is_on else theme.border)
         self.audit_btn.tooltip = f"Side-by-Side Audit Mode: {'ON' if is_on else 'OFF'} (Alt+A)"
-        self.audit_btn.content = self.audit_icon
         safe_update(self.audit_icon)
         safe_update(self.audit_btn)
         self.tools_menu_btn.items = self._build_tools_menu_items()
@@ -1026,6 +1089,35 @@ class TextPanel(ft.Container):
             self._update_audit_btn_ui(True)
         state.notify()
 
+    def _on_quality_change(self, e):
+        q = (e.control.value or "standard").strip().lower()
+        if q not in QUALITY_MODELS:
+            q = "standard"
+        state.set_active_quality(q)
+        try:
+            cfg = load_config()
+            cfg["quality"] = q
+            save_config(cfg)
+        except Exception:
+            pass
+        self.quality_dropdown.tooltip = (
+            f"Standard: {QUALITY_MODELS['standard']} (fast)  ·  "
+            f"High: {QUALITY_MODELS['high']} (accurate) — using {QUALITY_MODELS[q]}"
+        )
+        safe_update(self.quality_dropdown)
+        p = getattr(e, "page", None) or get_page(self)
+        if p:
+            try:
+                p.show_dialog(
+                    ft.SnackBar(
+                        content=ft.Text(f"Quality: {q.capitalize()} ({QUALITY_MODELS[q]})", size=13, color=theme.text_primary),
+                        bgcolor=theme.glass_bg,
+                        duration=1500,
+                    )
+                )
+            except Exception:
+                pass
+
     def cycle_output_mode(self, e):
         curr = state.active_output_mode if state.active_output_mode in self.MODE_KEYS else "document"
         curr_idx = self.MODE_KEYS.index(curr)
@@ -1040,8 +1132,7 @@ class TextPanel(ft.Container):
         icon_name = self.MODE_ICONS.get(mode, ft.Icons.DESCRIPTION_OUTLINED)
         self.output_mode_icon.icon = icon_name
         self.output_mode_icon.name = icon_name
-        self.output_mode_btn.content = self.output_mode_icon
-        self.output_mode_text.value = f"Format: {self.MODE_LABELS.get(mode, 'Document')}"
+        self.output_mode_text.value = self.MODE_LABELS.get(mode, 'Document')
         label = self.MODE_LABELS.get(mode, mode)
         desc = self.MODE_DESCRIPTIONS.get(mode, "")
         self.output_mode_btn.tooltip = f"Format: {label} ({desc}) - Click to cycle"
@@ -1122,13 +1213,12 @@ class TextPanel(ft.Container):
 
         copy_text_to_clipboard(final_text, page=p)
 
-        # Inline button visual feedback
+        # Inline button visual feedback (label preserved — Row content untouched)
         self.copy_icon.icon = ft.Icons.CHECK_ROUNDED
         self.copy_icon.name = ft.Icons.CHECK_ROUNDED
-        self.copy_icon.color = "#10B981" if not theme.is_dark else "#34D399"
+        self.copy_icon.color = theme.success
         self.copy_text.value = "Copied!"
-        self.copy_text.color = "#10B981" if not theme.is_dark else "#34D399"
-        self.copy_btn.content = self.copy_icon
+        self.copy_text.color = theme.success
         safe_update(self.copy_icon)
         safe_update(self.copy_btn)
 
@@ -1137,9 +1227,8 @@ class TextPanel(ft.Container):
             self.copy_icon.icon = ft.Icons.CONTENT_COPY_ROUNDED
             self.copy_icon.name = ft.Icons.CONTENT_COPY_ROUNDED
             self.copy_icon.color = theme.text_primary
-            self.copy_text.value = "Copy all"
+            self.copy_text.value = "Copy"
             self.copy_text.color = theme.text_primary
-            self.copy_btn.content = self.copy_icon
             safe_update(self.copy_icon)
             safe_update(self.copy_btn)
 
@@ -1158,48 +1247,136 @@ class TextPanel(ft.Container):
             except Exception:
                 pass
 
+    def _empty_placeholder(self):
+        # Single-primary rule: the header "Extract text" button is the ONLY
+        # primary CTA. This empty state is instructional and points to it.
+        return ft.Container(
+            padding=40,
+            alignment=ft.Alignment.CENTER,
+            content=ft.Column(
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=SPACE_SM,
+                controls=[
+                    ft.Icon(ft.Icons.DESCRIPTION_OUTLINED, size=28, color=theme.text_secondary),
+                    ft.Text(
+                        "No text yet",
+                        size=TEXT_MD,
+                        weight=ft.FontWeight.W_600,
+                        color=theme.text_primary,
+                        font_family=FONT_FAMILY_UI,
+                    ),
+                    ft.Text(
+                        "Load a document, then press Extract text above.",
+                        size=TEXT_SM,
+                        color=theme.text_secondary,
+                        text_align=ft.TextAlign.CENTER,
+                        font_family=FONT_FAMILY_UI,
+                    ),
+                    ft.Container(
+                        content=ft.Text(
+                            "Ctrl + Enter",
+                            size=11,
+                            weight=ft.FontWeight.W_500,
+                            color=theme.text_secondary,
+                            font_family=FONT_FAMILY_MONO,
+                        ),
+                        bgcolor=theme.button_bg,
+                        border=ft.Border.all(1, theme.border),
+                        border_radius=4,
+                        padding=ft.Padding.symmetric(horizontal=8, vertical=3),
+                    ),
+                ],
+            ),
+        )
+
+    def _loading_placeholder(self):
+        return ft.Container(
+            padding=40,
+            alignment=ft.Alignment.CENTER,
+            content=ft.Column(
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=SPACE_MD,
+                controls=[
+                    ft.ProgressRing(width=28, height=28, stroke_width=3, color=theme.accent),
+                    ft.Text(
+                        "Extracting text…",
+                        size=TEXT_MD,
+                        weight=ft.FontWeight.W_600,
+                        color=theme.text_primary,
+                        font_family=FONT_FAMILY_UI,
+                    ),
+                    ft.Text(
+                        "Vision model is reading your document.",
+                        size=TEXT_SM,
+                        color=theme.text_secondary,
+                        text_align=ft.TextAlign.CENTER,
+                        font_family=FONT_FAMILY_UI,
+                    ),
+                ],
+            ),
+        )
+
+    def _error_placeholder(self, details: str = ""):
+        msg = "Couldn't read this image. Try a sharper photo or higher-resolution scan."
+        return ft.Container(
+            padding=32,
+            alignment=ft.Alignment.CENTER,
+            content=ft.Column(
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=SPACE_SM,
+                controls=[
+                    ft.Icon(ft.Icons.ERROR_OUTLINE_ROUNDED, size=28, color=theme.error),
+                    ft.Text(
+                        "Extraction failed",
+                        size=TEXT_MD,
+                        weight=ft.FontWeight.W_600,
+                        color=theme.text_primary,
+                        font_family=FONT_FAMILY_UI,
+                    ),
+                    ft.Text(
+                        msg,
+                        size=TEXT_SM,
+                        color=theme.text_secondary,
+                        text_align=ft.TextAlign.CENTER,
+                        font_family=FONT_FAMILY_UI,
+                    ),
+                    ft.Text(
+                        details[:160] if details else "",
+                        size=11,
+                        color=theme.text_secondary,
+                        text_align=ft.TextAlign.CENTER,
+                        font_family=FONT_FAMILY_MONO,
+                        visible=bool(details),
+                    ),
+                    ft.OutlinedButton(
+                        content=ft.Row(
+                            spacing=6,
+                            tight=True,
+                            controls=[
+                                ft.Icon(ft.Icons.REFRESH_ROUNDED, size=14, color=theme.text_primary),
+                                ft.Text("Retry extraction", size=12, color=theme.text_primary, font_family=FONT_FAMILY_UI),
+                            ],
+                        ),
+                        style=ft.ButtonStyle(
+                            shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+                            side=ft.BorderSide(1, theme.border),
+                            padding=ft.Padding.symmetric(horizontal=12, vertical=7),
+                        ),
+                        on_click=self.on_extract_click,
+                        tooltip="Retry (Ctrl+Enter) — same action as the header button",
+                    ),
+                ],
+            ),
+        )
+
     def _rebuild_blocks(self, text: str):
         self.blocks_column.controls.clear()
         if not text:
             state.total_blocks_count = 0
-            self.blocks_column.controls.append(
-                ft.Container(
-                    padding=40,
-                    alignment=ft.Alignment.CENTER,
-                    content=ft.Column(
-                        alignment=ft.MainAxisAlignment.CENTER,
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                        spacing=12,
-                        controls=[
-                            ft.Icon(ft.Icons.DESCRIPTION_OUTLINED, size=28, color=theme.text_secondary),
-                            ft.Text(
-                                "No text extracted from this document yet.",
-                                size=13,
-                                color=theme.text_secondary,
-                                font_family=FONT_FAMILY_UI,
-                            ),
-                            ft.ElevatedButton(
-                                content=ft.Row(
-                                    spacing=6,
-                                    tight=True,
-                                    controls=[
-                                        ft.Icon(ft.Icons.PLAY_ARROW_ROUNDED, size=15, color="#FFFFFF"),
-                                        ft.Text("Extract text from document", size=12, weight=ft.FontWeight.W_600, color="#FFFFFF", font_family=FONT_FAMILY_UI),
-                                    ],
-                                ),
-                                style=ft.ButtonStyle(
-                                    bgcolor=theme.accent,
-                                    shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
-                                    padding=ft.Padding.symmetric(horizontal=14, vertical=8),
-                                    side=ft.BorderSide(2, theme.accent),
-                                ),
-                                on_click=self.on_extract_click,
-                                tooltip="Extract text with vision model (Ctrl+Enter)",
-                            ),
-                        ],
-                    ),
-                )
-            )
+            self.blocks_column.controls.append(self._empty_placeholder())
             return
 
         # Split into paragraphs by double newlines or single newlines
@@ -1223,6 +1400,20 @@ class TextPanel(ft.Container):
                 )
             )
 
+    def _toast(self, page, message: str, duration: int = 2000, bgcolor: str | None = None):
+        # Floating + lifted + dismissible so toasts never sit flush over the
+        # bottom toolbar. Short duration so empty-state hints auto-clear.
+        page.show_dialog(
+            ft.SnackBar(
+                content=ft.Text(message, size=13, color=theme.text_primary if bgcolor != "#EF4444" else "#FFFFFF"),
+                bgcolor=bgcolor or theme.glass_bg,
+                duration=duration,
+                behavior=ft.SnackBarBehavior.FLOATING,
+                margin=ft.Margin.symmetric(horizontal=16, vertical=12),
+                show_close_icon=True,
+            )
+        )
+
     def on_export_click(self, e):
         p = get_page(self)
         if not p:
@@ -1230,9 +1421,7 @@ class TextPanel(ft.Container):
         item = state.selected_item
         text_content = self.raw_output_field.value or (item.extracted_text if item else "")
         if not text_content and not any(it.extracted_text for it in state.queue):
-            p.show_dialog(
-                ft.SnackBar(content=ft.Text("No extracted text to export.", color=theme.text_primary), bgcolor=theme.glass_bg)
-            )
+            self._toast(p, "No extracted text to export.", duration=2000)
             return
 
         def save_file(ext: str, content: str, filename_override: str = None):
@@ -1248,24 +1437,14 @@ class TextPanel(ft.Container):
                     f.write(content)
                 p.pop_dialog()
                 folder_name = os.path.basename(target_dir) or target_dir
-                p.show_dialog(
-                    ft.SnackBar(
-                        content=ft.Text(f"Saved {fname} to {folder_name}", size=13, color=theme.text_primary),
-                        bgcolor=theme.glass_bg,
-                        duration=3000,
-                    )
-                )
+                self._toast(p, f"Saved {fname} to {folder_name}", duration=2500)
             except Exception as ex:
-                p.show_dialog(
-                    ft.SnackBar(content=ft.Text(f"Export failed: {str(ex)}"), bgcolor="#EF4444")
-                )
+                self._toast(p, f"Export failed: {str(ex)}", duration=3000, bgcolor="#EF4444")
 
         def export_merged(ext: str):
             completed = [it for it in state.queue if it.extracted_text and it.extracted_text.strip()]
             if not completed:
-                p.show_dialog(
-                    ft.SnackBar(content=ft.Text("No completed documents with text in queue.", color=theme.text_primary), bgcolor=theme.glass_bg)
-                )
+                self._toast(p, "No completed documents with text in queue.", duration=2000)
                 return
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             merged_lines = [
@@ -1339,12 +1518,33 @@ class TextPanel(ft.Container):
         self.extract_btn.disabled = is_processing
         safe_update(self)
 
+    def _paint_status(self, kind: str):
+        # Premium status pill: dot + tinted bg/border per state.
+        k = (kind or "").lower()
+        if k in ("done", "success"):
+            dot, fg, bg = theme.success, theme.success, theme.accent_soft
+            # success tint leans green; reuse soft green via success with low alpha
+            bg = "rgba(5, 150, 105, 0.12)" if not theme.is_dark else "rgba(52, 211, 153, 0.16)"
+            border = theme.success
+        elif k in ("failed", "error"):
+            dot, fg = theme.error, theme.error
+            bg = "rgba(220, 38, 38, 0.10)" if not theme.is_dark else "rgba(248, 113, 113, 0.16)"
+            border = theme.error
+        elif k in ("extracting", "processing", "extracting…"):
+            dot, fg, bg, border = theme.accent, theme.accent, theme.accent_soft, theme.accent
+        else:
+            dot, fg, bg, border = theme.text_secondary, theme.text_secondary, theme.inset, theme.border
+        self.status_dot.bgcolor = dot
+        self.status_label.color = fg
+        self.status_pill.bgcolor = bg
+        self.status_pill.border = ft.Border.all(1, border)
+
     def update_text_view(self):
         item = state.selected_item
         if not item:
             self.char_count_text.value = "0 chars"
             self.status_label.value = "Ready"
-            self.status_label.color = theme.text_secondary
+            self._paint_status("Ready")
             self.raw_output_field.value = ""
             self.markdown_output_view.value = "*Drop an image or PDF here to extract its text.*"
             self._rebuild_blocks("")
@@ -1362,29 +1562,33 @@ class TextPanel(ft.Container):
         self.raw_output_field.text_size = 14 if is_bengali else 13
 
         if item.status == "Processing":
-            self.status_label.value = "Extracting text"
-            self.status_label.color = theme.accent
+            self.status_label.value = "Extracting…"
+            self._paint_status("Extracting")
             self.raw_output_field.value = "Extracting document text with vision model..."
             self.markdown_output_view.value = "*Extracting document text with vision model...*"
-            self._rebuild_blocks("Extracting document text with vision model...")
+            self.blocks_column.controls.clear()
+            state.total_blocks_count = 0
+            self.blocks_column.controls.append(self._loading_placeholder())
         elif item.status == "Done":
             self.status_label.value = "Done"
-            self.status_label.color = "#10B981" if not theme.is_dark else "#34D399"
+            self._paint_status("Done")
             self.raw_output_field.value = text
             self.markdown_output_view.value = text
             self._rebuild_blocks(text)
         elif item.status == "Failed":
-            self.status_label.value = "Error"
-            self.status_label.color = "#EF4444" if not theme.is_dark else "#F87171"
+            self.status_label.value = "Failed"
+            self._paint_status("Failed")
             err_msg = "Couldn't read this image. Try a sharper photo or a higher-resolution scan."
             if item.error_message:
                 err_msg += f"\n\nDetails: {item.error_message}"
             self.raw_output_field.value = err_msg
             self.markdown_output_view.value = f"**Couldn't read this image. Try a sharper photo or a higher-resolution scan.**\n\n`{item.error_message}`"
-            self._rebuild_blocks(err_msg)
+            self.blocks_column.controls.clear()
+            state.total_blocks_count = 0
+            self.blocks_column.controls.append(self._error_placeholder(item.error_message or ""))
         else:
             self.status_label.value = "Ready"
-            self.status_label.color = theme.text_secondary
+            self._paint_status("Ready")
             self.raw_output_field.value = text
             self.markdown_output_view.value = text or "*Click 'Extract text' below to begin.*"
             self._rebuild_blocks(text)
@@ -1397,16 +1601,24 @@ class TextPanel(ft.Container):
         icon_name = self.MODE_ICONS.get(curr_mode, ft.Icons.DESCRIPTION_OUTLINED)
         self.output_mode_icon.icon = icon_name
         self.output_mode_icon.name = icon_name
-        self.output_mode_btn.content = self.output_mode_icon
+        self.output_mode_text.value = self.MODE_LABELS.get(curr_mode, "Document")
         label = self.MODE_LABELS.get(curr_mode, "Document")
         desc = self.MODE_DESCRIPTIONS.get(curr_mode, "")
         self.output_mode_btn.tooltip = f"Format: {label} ({desc}) - Click to cycle"
+        if (state.active_quality in QUALITY_MODELS) and self.quality_dropdown.value != state.active_quality:
+            self.quality_dropdown.value = state.active_quality
 
         safe_update(self)
 
-        if state.audit_mode and get_page(self.blocks_column):
+        if state.audit_mode:
             try:
-                self.blocks_column.scroll_to(scroll_key=f"block_{state.active_block_index}", duration=150)
+                _pg = get_page(self.blocks_column) or get_page(self)
+                if _pg is not None and hasattr(_pg, "run_task"):
+                    _pg.run_task(
+                        self.blocks_column.scroll_to,
+                        scroll_key=f"block_{state.active_block_index}",
+                        duration=150,
+                    )
             except Exception:
                 pass
 
@@ -1414,8 +1626,14 @@ class TextPanel(ft.Container):
         unfreeze(self)
         self.bgcolor = theme.surface
         self.border = ft.Border.all(1, theme.border)
+        self.eyebrow.color = theme.text_secondary
         self.header_title.color = theme.text_primary
         self.char_count_text.color = theme.text_secondary
+        self.char_pill.bgcolor = theme.inset
+        self.char_pill.border = ft.Border.all(1, theme.border)
+        self._paint_status(self.status_label.value or "Ready")
+        self.quality_dropdown.border_color = theme.border
+        self.quality_dropdown.focused_border_color = theme.accent
         self.text_canvas.bgcolor = theme.inset
         self.text_canvas.border = ft.Border.all(1, theme.border)
 

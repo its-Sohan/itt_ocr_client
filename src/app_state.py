@@ -43,11 +43,20 @@ def format_file_size(size_bytes: int) -> str:
     else:
         return f"{size_bytes / (1024 * 1024):.1f} MB"
 
+# Extraction quality -> concrete vision model (single source of truth).
+QUALITY_MODELS = {
+    "standard": "gemini-3.5-flash-lite",
+    "high": "gemini-3.7-flash",
+}
+QUALITY_ORDER = ("standard", "high")
+
+
 class AppState:
     def __init__(self):
         self.queue: List[QueueItem] = []
         self.selected_item_id: Optional[str] = None
         self.active_output_mode: str = "document"
+        self.active_quality: str = "standard"
         self.is_processing_all: bool = False
         self.status_message: str = "Ready"
         self.audit_mode: bool = False
@@ -124,6 +133,14 @@ class AppState:
         if mode in ("document", "spreadsheet", "key_value", "raw_text"):
             self.active_output_mode = mode
             self.notify()
+
+    def set_active_quality(self, quality: str):
+        if quality in QUALITY_MODELS:
+            self.active_quality = quality
+            self.notify()
+
+    def active_model(self) -> str:
+        return QUALITY_MODELS.get(self.active_quality, QUALITY_MODELS["standard"])
 
     def select_item(self, item_id: str):
         self.selected_item_id = item_id

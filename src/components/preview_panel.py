@@ -39,40 +39,65 @@ class PreviewPanel(ft.Container):
         self._paper_bounds_cache = {}
 
         # Image control (fills aspect-ratio viewport perfectly)
+        # animate_rotation: 90° steps ease instead of snapping.
         self.image_control = ft.Image(
             src="",
             fit=ft.BoxFit.FILL,
             border_radius=RADIUS_PANEL,
             rotate=ft.Rotate(angle=0),
+            animate_rotation=ft.Animation(250, ft.AnimationCurve.EASE_OUT),
         )
 
-        # Empty state invitation
-        self.empty_icon = ft.Icon(ft.Icons.INSERT_DRIVE_FILE_OUTLINED, size=24, color=theme.text_secondary)
+        # Empty state invitation — premium: soft accent medallion + title + hint pill.
+        self.empty_icon = ft.Icon(ft.Icons.INSERT_DRIVE_FILE_OUTLINED, size=26, color=theme.accent)
         self.empty_icon_box = ft.Container(
-            width=52,
-            height=52,
-            border_radius=RADIUS_PANEL,
-            bgcolor=theme.surface,
-            border=ft.Border.all(1, theme.border),
+            width=56,
+            height=56,
+            border_radius=28,
+            bgcolor=theme.accent_soft,
+            border=ft.Border.all(1, theme.accent),
             alignment=ft.Alignment.CENTER,
             content=self.empty_icon,
         )
+        self.empty_title = ft.Text(
+            "No document yet",
+            size=14,
+            weight=ft.FontWeight.W_600,
+            color=theme.text_primary,
+            text_align=ft.TextAlign.CENTER,
+            font_family=FONT_FAMILY_UI,
+        )
         self.empty_text = ft.Text(
             "Drop an image or PDF here to extract its text.",
-            size=13,
+            size=12,
             weight=ft.FontWeight.W_400,
             color=theme.text_secondary,
             text_align=ft.TextAlign.CENTER,
             font_family=FONT_FAMILY_UI,
         )
+        self.empty_hint = ft.Container(
+            content=ft.Text(
+                "PNG · JPG · WebP · PDF",
+                size=10,
+                weight=ft.FontWeight.W_600,
+                color=theme.text_secondary,
+                font_family=FONT_FAMILY_UI,
+            ),
+            bgcolor=theme.surface,
+            border=ft.Border.all(1, theme.border),
+            border_radius=20,
+            padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+        )
 
         self.empty_placeholder = ft.Column(
             alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=12,
+            spacing=10,
             controls=[
                 self.empty_icon_box,
+                self.empty_title,
                 self.empty_text,
+                self.empty_hint,
             ],
         )
 
@@ -84,6 +109,9 @@ class PreviewPanel(ft.Container):
         )
 
         # Signature Motion: Precision Scan-line
+        # animate_position smooths the 40ms sweep steps; animate_opacity
+        # fades the line in/out instead of popping. Respected by
+        # reduced_motion (sweep skipped, line parked at top).
         self.scan_line = ft.Container(
             top=0,
             left=0,
@@ -99,6 +127,9 @@ class PreviewPanel(ft.Container):
                 )
             ],
             visible=False,
+            opacity=0.0,
+            animate_opacity=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
+            animate_position=ft.Animation(40, ft.AnimationCurve.LINEAR),
         )
 
         # Floating Glass Toolbar (16px radius, 20px blur, translucent fill, glass shadow)
@@ -152,7 +183,8 @@ class PreviewPanel(ft.Container):
             shadow=theme.glass_shadow,
             padding=ft.Padding.symmetric(horizontal=8, vertical=4),
             visible=False,
-            animate_opacity=150,
+            opacity=0.0,
+            animate_opacity=ft.Animation(150, ft.AnimationCurve.EASE_OUT),
         )
 
         # Synchronized Audit Focus Guide overlay
@@ -224,25 +256,50 @@ class PreviewPanel(ft.Container):
             on_hover=self._on_canvas_hover,
         )
 
-        # Header metadata
-        self.doc_title = ft.Text(
-            "Document canvas",
-            size=14,
-            weight=ft.FontWeight.W_500,
-            color=theme.text_primary,
-            font_family=FONT_FAMILY_UI,
-        )
-        self.doc_meta = ft.Text(
-            "No document loaded",
-            size=12,
+        # Header metadata — premium hierarchy: eyebrow + title + meta pill.
+        self.eyebrow = ft.Text(
+            "02  ·  PREVIEW",
+            size=10,
+            weight=ft.FontWeight.W_600,
             color=theme.text_secondary,
             font_family=FONT_FAMILY_UI,
         )
+        self.doc_title = ft.Text(
+            "Document canvas",
+            size=14,
+            weight=ft.FontWeight.W_600,
+            color=theme.text_primary,
+            font_family=FONT_FAMILY_UI,
+        )
+        self.doc_meta_text = ft.Text(
+            "No document loaded",
+            size=11,
+            weight=ft.FontWeight.W_500,
+            color=theme.text_secondary,
+            font_family=FONT_FAMILY_UI,
+            max_lines=1,
+            overflow=ft.TextOverflow.ELLIPSIS,
+        )
+        # Keep legacy attr for existing update call-sites.
+        self.doc_meta = self.doc_meta_text
+        self.doc_meta_pill = ft.Container(
+            content=self.doc_meta_text,
+            bgcolor=theme.inset,
+            border=ft.Border.all(1, theme.border),
+            border_radius=20,
+            padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+        )
 
-        header_row = ft.Row(
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            controls=[self.doc_title, self.doc_meta],
+        header_row = ft.Column(
+            spacing=4,
+            controls=[
+                self.eyebrow,
+                ft.Row(
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    controls=[self.doc_title, self.doc_meta_pill],
+                ),
+            ],
         )
 
         main_column = ft.Column(
@@ -268,9 +325,17 @@ class PreviewPanel(ft.Container):
         self.update_preview()
 
     def _on_canvas_hover(self, e: ft.HoverEvent):
-        if state.selected_item and os.path.exists(state.selected_item.file_path):
+        has_doc = bool(state.selected_item and os.path.exists(state.selected_item.file_path))
+        if not has_doc:
+            return
+        is_enter = getattr(e, "data", "true") == "true"
+        if is_enter:
             self.floating_toolbar.visible = True
-            safe_update(self.floating_toolbar)
+            self.floating_toolbar.opacity = 1.0
+        else:
+            # Fade out; keep visible until opacity animates (no layout jump).
+            self.floating_toolbar.opacity = 0.0
+        safe_update(self.floating_toolbar)
 
     def rotate_image(self, e):
         self.rotation_degrees = (self.rotation_degrees + 90) % 360
@@ -293,6 +358,7 @@ class PreviewPanel(ft.Container):
     def start_scan_animation(self):
         self.is_scanning_anim = True
         self.scan_line.visible = True
+        self.scan_line.opacity = 1.0
         safe_update(self.scan_line)
 
         if theme.reduced_motion:
@@ -323,6 +389,9 @@ class PreviewPanel(ft.Container):
 
     def stop_scan_animation(self):
         self.is_scanning_anim = False
+        # Fade out first; visible=False applies after the opacity anim.
+        self.scan_line.opacity = 0.0
+        safe_update(self.scan_line)
         self.scan_line.visible = False
         safe_update(self.scan_line)
 
@@ -385,6 +454,7 @@ class PreviewPanel(ft.Container):
             self.doc_meta.value = "No document loaded"
             self.canvas_content.content = self.empty_placeholder
             self.floating_toolbar.visible = False
+            self.floating_toolbar.opacity = 0.0
             self.stop_scan_animation()
             self.update_audit_guide()
             safe_update(self)
@@ -404,9 +474,11 @@ class PreviewPanel(ft.Container):
             self.image_viewport.aspect_ratio = ar
             self.canvas_content.content = self.image_viewport
             self.floating_toolbar.visible = True
+            self.floating_toolbar.opacity = 1.0
         else:
             self.canvas_content.content = self.empty_placeholder
             self.floating_toolbar.visible = False
+            self.floating_toolbar.opacity = 0.0
 
         if item.status == "Processing":
             if not self.is_scanning_anim:
@@ -424,13 +496,21 @@ class PreviewPanel(ft.Container):
         self.border = ft.Border.all(1, theme.border)
         self.inner_canvas.bgcolor = theme.inset
         self.inner_canvas.border = ft.Border.all(1, theme.border)
-        self.empty_icon_box.bgcolor = theme.surface
-        self.empty_icon_box.border = ft.Border.all(1, theme.border)
-        self.empty_icon.color = theme.text_secondary
+        self.empty_icon_box.bgcolor = theme.accent_soft
+        self.empty_icon_box.border = ft.Border.all(1, theme.accent)
+        self.empty_icon.color = theme.accent
+        if hasattr(self, "empty_title"):
+            self.empty_title.color = theme.text_primary
         self.empty_text.color = theme.text_secondary
+        if hasattr(self, "empty_hint"):
+            self.empty_hint.bgcolor = theme.surface
+            self.empty_hint.border = ft.Border.all(1, theme.border)
 
+        self.eyebrow.color = theme.text_secondary
         self.doc_title.color = theme.text_primary
         self.doc_meta.color = theme.text_secondary
+        self.doc_meta_pill.bgcolor = theme.inset
+        self.doc_meta_pill.border = ft.Border.all(1, theme.border)
         self.scan_line.bgcolor = theme.accent
 
         self.audit_focus_box.border = ft.Border.all(1.5, theme.accent)

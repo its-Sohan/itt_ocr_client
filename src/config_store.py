@@ -12,6 +12,9 @@ DEFAULT_CONFIG = {
     "model_name": "gpt-4o-mini",
     "auto_extract": True,
     "default_output_mode": "document",
+    "quality": "standard",
+    "releases_repo": "its-Sohan/itt-ocr-releases",
+    "check_updates_on_startup": True,
     "usage_stats": {
         "total_scanned_or_uploaded": 0,
         "total_processed": 0,

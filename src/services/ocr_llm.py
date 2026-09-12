@@ -82,10 +82,11 @@ def encode_image_base64(file_path: str) -> str:
     with open(file_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
-async def extract_text_with_llm(file_path: str, mode: str = "document") -> str:
+async def extract_text_with_llm(file_path: str, mode: str = "document", model: Optional[str] = None) -> str:
     """
     Sends the image to an OpenAI-compatible vision endpoint with mode-specific instructions
     (supports OpenAI GPT-4o, OpenRouter, Groq, Ollama, Gemini API compatible, etc.)
+    Quality dropdown passes an explicit model; otherwise falls back to Settings model.
     """
     config = load_config()
     api_key = config.get("api_key", "").strip()
@@ -96,7 +97,7 @@ async def extract_text_with_llm(file_path: str, mode: str = "document") -> str:
     else:
         url = f"{clean_base}/chat/completions"
 
-    model_name = config.get("model_name", "gpt-4o-mini").strip()
+    model_name = (model or "").strip() or config.get("model_name", "gpt-4o-mini").strip()
 
     if not api_key and "localhost" not in clean_base and "127.0.0.1" not in clean_base:
         raise ValueError("API Key is missing. Please configure your API Key in Settings.")

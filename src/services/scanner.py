@@ -6,6 +6,26 @@ import time
 from pathlib import Path
 from typing import Optional, Tuple
 
+CREATE_NO_WINDOW = 0x08000000
+
+
+def _win_hidden_popen_kwargs() -> dict:
+    if not sys.platform.startswith("win"):
+        return {}
+    kwargs: dict = {"creationflags": CREATE_NO_WINDOW}
+    try:
+        startupinfo_cls = getattr(subprocess, "STARTUPINFO", None)
+        use_show = getattr(subprocess, "STARTF_USESHOWWINDOW", 1)
+        if startupinfo_cls is not None:
+            si = startupinfo_cls()
+            si.dwFlags |= use_show
+            si.wShowWindow = 0  # SW_HIDE
+            kwargs["startupinfo"] = si
+    except Exception:
+        pass
+    return kwargs
+
+
 def is_windows() -> bool:
     return sys.platform.startswith("win")
 
@@ -80,6 +100,7 @@ def scan_document_windows() -> Tuple[str, Optional[str]]:
             capture_output=True,
             text=True,
             timeout=120,
+            **_win_hidden_popen_kwargs(),
         )
         stdout = res.stdout.strip()
         for line in stdout.splitlines():

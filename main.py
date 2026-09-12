@@ -13,6 +13,8 @@ from src.components.command_palette import create_command_palette
 from src.services.scanner import scan_document
 from src.services.ocr_llm import extract_text_with_llm
 from src.services.clipboard import get_clipboard_image
+from src.services.updater import check_for_updates, APP_VERSION, DEFAULT_RELEASE_REPO
+from src.components.update_dialog import create_update_dialog
 
 def main(page: ft.Page):
     page.title = "ITT OCR"
@@ -36,9 +38,12 @@ def main(page: ft.Page):
     page.window.height = 860
     page.window.icon = "assets/app_icon.png"
 
-    # Initialize default output mode from saved user settings
+    # Initialize default output mode + quality from saved user settings
     initial_config = load_config()
     state.active_output_mode = initial_config.get("default_output_mode", "document")
+    _saved_quality = initial_config.get("quality", "standard")
+    if _saved_quality in ("standard", "high"):
+        state.active_quality = _saved_quality
 
     file_picker = ft.FilePicker()
 
@@ -109,7 +114,23 @@ def main(page: ft.Page):
         def on_open_wfs(ev):
             try:
                 import subprocess
-                subprocess.Popen(["wfs.exe"], shell=True)
+                import sys as _sys
+
+                _popen_kwargs: dict = {}
+                if _sys.platform.startswith("win"):
+                    _popen_kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+                    try:
+                        _si_cls = getattr(subprocess, "STARTUPINFO", None)
+                        _use_show = getattr(subprocess, "STARTF_USESHOWWINDOW", 1)
+                        if _si_cls is not None:
+                            _si = _si_cls()
+                            _si.dwFlags |= _use_show
+                            _si.wShowWindow = 0  # SW_HIDE
+                            _popen_kwargs["startupinfo"] = _si
+                    except Exception:
+                        pass
+                    _popen_kwargs["close_fds"] = True
+                subprocess.Popen(["wfs.exe"], shell=False, **_popen_kwargs)
             except Exception:
                 pass
 
@@ -264,7 +285,7 @@ def main(page: ft.Page):
         try:
             mode = state.active_output_mode
             item.output_mode = mode
-            extracted = await extract_text_with_llm(item.file_path, mode=mode)
+            extracted = await extract_text_with_llm(item.file_path, mode=mode, model=state.active_model())
             item.extracted_text = extracted
             item.status = "Done"
             item.error_message = ""
@@ -478,6 +499,24 @@ def main(page: ft.Page):
     page.on_keyboard_event = on_keyboard
 
     page.add(app_container)
+
+    # Silent background update check on app launch
+    async def check_startup_updates():
+        try:
+            # Let initial frame render smoothly before checking
+            await asyncio.sleep(1.5)
+            cfg = load_config()
+            if not cfg.get("check_updates_on_startup", True):
+                return
+            repo = cfg.get("releases_repo", DEFAULT_RELEASE_REPO)
+            info = await check_for_updates(repo=repo, current_version=APP_VERSION)
+            if info.get("has_update"):
+                update_dialog = create_update_dialog(page, info)
+                page.show_dialog(update_dialog)
+        except Exception:
+            pass
+
+    page.run_task(check_startup_updates)
 
 if __name__ == "__main__":
     ft.run(main, assets_dir="src/assets")

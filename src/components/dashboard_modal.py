@@ -13,7 +13,7 @@ def create_dashboard_modal(page: ft.Page) -> ft.AlertDialog:
     chars = stats.get("total_characters_extracted", 0)
     success_rate = f"{(success / total_proc * 100):.1f}%" if total_proc > 0 else "100%"
 
-    def create_metric_card(title: str, value: str, subtitle: str):
+    def create_metric_card(title: str, value: str, subtitle: str, icon: str):
         return ft.Container(
             expand=True,
             bgcolor=theme.surface,
@@ -21,10 +21,25 @@ def create_dashboard_modal(page: ft.Page) -> ft.AlertDialog:
             border_radius=RADIUS_PANEL,
             padding=14,
             content=ft.Column(
-                spacing=4,
+                spacing=8,
                 controls=[
-                    ft.Text(title, size=12, weight=ft.FontWeight.W_500, color=theme.text_secondary, font_family=FONT_FAMILY_UI),
-                    ft.Text(value, size=20, weight=ft.FontWeight.W_600, color=theme.text_primary, font_family=FONT_FAMILY_UI),
+                    ft.Row(
+                        spacing=8,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        controls=[
+                            ft.Container(
+                                width=28,
+                                height=28,
+                                border_radius=14,
+                                bgcolor=theme.accent_soft,
+                                border=ft.Border.all(1, theme.accent),
+                                alignment=ft.Alignment.CENTER,
+                                content=ft.Icon(icon, size=14, color=theme.accent),
+                            ),
+                            ft.Text(title.upper(), size=10, weight=ft.FontWeight.W_600, color=theme.text_secondary, font_family=FONT_FAMILY_UI),
+                        ],
+                    ),
+                    ft.Text(value, size=22, weight=ft.FontWeight.W_700, color=theme.text_primary, font_family=FONT_FAMILY_UI),
                     ft.Text(subtitle, size=11, color=theme.text_secondary, font_family=FONT_FAMILY_UI),
                 ],
             ),
@@ -37,12 +52,18 @@ def create_dashboard_modal(page: ft.Page) -> ft.AlertDialog:
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         vertical_alignment=ft.CrossAxisAlignment.CENTER,
         controls=[
-            ft.Text(
-                "Usage metrics",
-                size=16,
-                weight=ft.FontWeight.W_600,
-                color=theme.text_primary,
-                font_family=FONT_FAMILY_UI,
+            ft.Column(
+                spacing=2,
+                controls=[
+                    ft.Text("METRICS", size=10, weight=ft.FontWeight.W_600, color=theme.text_secondary, font_family=FONT_FAMILY_UI),
+                    ft.Text(
+                        "Usage metrics",
+                        size=16,
+                        weight=ft.FontWeight.W_700,
+                        color=theme.text_primary,
+                        font_family=FONT_FAMILY_UI,
+                    ),
+                ],
             ),
             ft.IconButton(
                 icon=ft.Icons.CLOSE_ROUNDED,
@@ -55,20 +76,29 @@ def create_dashboard_modal(page: ft.Page) -> ft.AlertDialog:
     )
 
     session_strip = ft.Container(
-        bgcolor=theme.surface,
+        bgcolor=theme.inset,
         border=ft.Border.all(1, theme.border),
-        border_radius=RADIUS_PANEL,
-        padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+        border_radius=20,
+        padding=ft.Padding.symmetric(horizontal=12, vertical=7),
         content=ft.Row(
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
-                ft.Text(f"Session: {session_user}", size=12, weight=ft.FontWeight.W_500, color=theme.text_primary, font_family=FONT_FAMILY_UI),
+                ft.Text(f"Session: {session_user}", size=12, weight=ft.FontWeight.W_600, color=theme.text_primary, font_family=FONT_FAMILY_UI),
                 ft.Container(
-                    content=ft.Text("Active", size=11, weight=ft.FontWeight.W_500, color="#10B981" if not theme.is_dark else "#34D399"),
-                    bgcolor=theme.bg,
-                    border=ft.Border.all(1, theme.border),
-                    border_radius=4,
-                    padding=ft.Padding.symmetric(horizontal=6, vertical=2),
+                    content=ft.Row(
+                        spacing=6,
+                        tight=True,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        controls=[
+                            ft.Container(width=8, height=8, border_radius=4, bgcolor=theme.success),
+                            ft.Text("Active", size=11, weight=ft.FontWeight.W_600, color=theme.success),
+                        ],
+                    ),
+                    bgcolor=theme.surface,
+                    border=ft.Border.all(1, theme.success),
+                    border_radius=20,
+                    padding=ft.Padding.symmetric(horizontal=10, vertical=4),
                 ),
             ],
         ),
@@ -91,15 +121,15 @@ def create_dashboard_modal(page: ft.Page) -> ft.AlertDialog:
                 ft.Row(
                     spacing=10,
                     controls=[
-                        create_metric_card("Processed", str(total_proc), f"{success} successful, {failed} failed"),
-                        create_metric_card("Success rate", success_rate, "Overall transcription rate"),
+                        create_metric_card("Processed", str(total_proc), f"{success} successful, {failed} failed", ft.Icons.DESCRIPTION_OUTLINED),
+                        create_metric_card("Success rate", success_rate, "Overall transcription rate", ft.Icons.CHECK_CIRCLE_OUTLINED),
                     ],
                 ),
                 ft.Row(
                     spacing=10,
                     controls=[
-                        create_metric_card("Characters", f"{chars:,}", "Total transcribed characters"),
-                        create_metric_card("Estimated words", f"{chars // 5:,}", "Assuming ~5 chars per word"),
+                        create_metric_card("Characters", f"{chars:,}", "Total transcribed characters", ft.Icons.TEXT_FIELDS_OUTLINED),
+                        create_metric_card("Estimated words", f"{chars // 5:,}", "Assuming ~5 chars per word", ft.Icons.SPEED_OUTLINED),
                     ],
                 ),
                 ft.Row(

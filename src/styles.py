@@ -221,7 +221,172 @@ class ThemeState:
             )
         ]
 
+    # Semantic feedback tokens (resolved per light/dark mode)
+    @property
+    def success(self) -> str:
+        return DARK_SUCCESS if self.is_dark else LIGHT_SUCCESS
+
+    @property
+    def warning(self) -> str:
+        return DARK_WARNING if self.is_dark else LIGHT_WARNING
+
+    @property
+    def error(self) -> str:
+        return DARK_ERROR if self.is_dark else LIGHT_ERROR
+
+    @property
+    def accent_soft(self) -> str:
+        return DARK_ACCENT_SOFT if self.is_dark else LIGHT_ACCENT_SOFT
+
+    def status_color(self, status: str) -> str:
+        role = status_role(status)
+        if role == "success":
+            return self.success
+        if role == "error":
+            return self.error
+        if role == "accent":
+            return self.accent
+        return self.text_secondary
+
 theme = ThemeState()
+
+# ---------------------------------------------------------------------------
+# Guided-workflow design system (additive, backwards-compatible)
+# Single source of truth for color / type / spacing / elevation / motion.
+# Existing LIGHT_*/DARK_* + RADIUS_* + ThemeState tokens above are unchanged.
+# ---------------------------------------------------------------------------
+
+# Semantic feedback colors (light / dark)
+LIGHT_SUCCESS = "#059669"
+DARK_SUCCESS = "#34D399"
+LIGHT_WARNING = "#D97706"
+DARK_WARNING = "#FBBF24"
+LIGHT_ERROR = "#DC2626"
+DARK_ERROR = "#F87171"
+# Soft tint backgrounds for active step / status chips
+LIGHT_ACCENT_SOFT = "rgba(37, 99, 235, 0.08)"
+DARK_ACCENT_SOFT = "rgba(75, 136, 240, 0.16)"
+LIGHT_SUCCESS_SOFT = "rgba(5, 150, 105, 0.10)"
+DARK_SUCCESS_SOFT = "rgba(52, 211, 153, 0.14)"
+LIGHT_WARNING_SOFT = "rgba(217, 119, 6, 0.10)"
+DARK_WARNING_SOFT = "rgba(251, 191, 36, 0.14)"
+LIGHT_ERROR_SOFT = "rgba(220, 38, 38, 0.08)"
+DARK_ERROR_SOFT = "rgba(248, 113, 113, 0.14)"
+
+# Type scale (px) — one scale for the whole app
+TEXT_XS = 11
+TEXT_SM = 12
+TEXT_MD = 13
+TEXT_LG = 14
+TEXT_XL = 15
+TEXT_2XL = 16
+TEXT_EMPTY_ICON = 20
+TEXT_PANEL_ICON = 24
+TEXT_BLOCK_ICON = 28
+
+# Spacing scale (px) — use these instead of ad-hoc numbers
+SPACE_XS = 4
+SPACE_SM = 8
+SPACE_MD = 12
+SPACE_LG = 16
+SPACE_XL = 20
+SPACE_2XL = 24
+
+# Radii (extends existing RADIUS_PANEL / RADIUS_GLASS)
+RADIUS_SM = 4
+RADIUS_MD = 8
+RADIUS_LG = 12
+# RADIUS_PANEL (6) and RADIUS_GLASS (18) defined above are kept as-is.
+
+# Motion (ms) — Flet implicit animations
+DUR_FAST = 150
+DUR_MED = 200
+DUR_SLOW = 300
+CURVE_STANDARD = ft.AnimationCurve.EASE_OUT
+
+# Workflow steps: upload -> preview -> extract -> review
+# Each panel header shows its step number; the strip in main.py lights up
+# the current step derived from the selected QueueItem.
+WORKFLOW_STEPS = (
+    {"index": 1, "key": "upload", "label": "Upload"},
+    {"index": 2, "key": "preview", "label": "Preview"},
+    {"index": 3, "key": "extract", "label": "Extract"},
+    {"index": 4, "key": "review", "label": "Review"},
+)
+
+# Status -> semantic role mapping (single place, no per-file hex)
+STATUS_ORDER = ("Ready", "Processing", "Done", "Failed")
+
+
+def status_role(status: str) -> str:
+    """Map a QueueItem.status to a semantic role."""
+    s = (status or "Ready").lower()
+    if s == "done":
+        return "success"
+    if s == "processing":
+        return "accent"
+    if s == "failed":
+        return "error"
+    return "muted"
+
+
+def workflow_step_for_item(item) -> int:
+    """Derive 1-4 workflow step from a QueueItem (None -> step 1).
+
+    1 Upload  : no queue item / no file on disk
+    2 Preview : file present, never extracted (Ready, empty text)
+    3 Extract : currently Processing
+    4 Review  : Done / Failed / Ready-with-text (ready to review/export)
+    """
+    if item is None:
+        return 1
+    status = getattr(item, "status", "Ready") or "Ready"
+    text = (getattr(item, "extracted_text", "") or "").strip()
+    if status == "Processing":
+        return 3
+    if status in ("Done", "Failed") or text:
+        return 4
+    file_path = getattr(item, "file_path", "") or ""
+    try:
+        import os as _os
+
+        if file_path and _os.path.exists(file_path):
+            return 2
+    except Exception:
+        pass
+    return 1
+
+
+def primary_button_style() -> ft.ButtonStyle:
+    """The ONE primary CTA style (Extract). Accent fill, white text."""
+    return ft.ButtonStyle(
+        bgcolor=theme.accent,
+        color="#FFFFFF",
+        shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+        padding=ft.Padding.symmetric(horizontal=SPACE_MD, vertical=8),
+        side=ft.BorderSide(2, theme.accent),
+    )
+
+
+def secondary_button_style() -> ft.ButtonStyle:
+    """Secondary outlined actions (Browse / Scan / Paste)."""
+    return ft.ButtonStyle(
+        shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+        side=ft.BorderSide(1, theme.border),
+        padding=ft.Padding.symmetric(horizontal=SPACE_SM, vertical=7),
+        bgcolor=theme.button_bg,
+        color=theme.text_primary,
+    )
+
+
+def ui_text_style(size: int = TEXT_MD, secondary: bool = False, bold: bool = False) -> ft.TextStyle:
+    return ft.TextStyle(
+        size=size,
+        color=theme.text_secondary if secondary else theme.text_primary,
+        font_family=FONT_FAMILY_UI,
+        weight=ft.FontWeight.W_600 if bold else ft.FontWeight.W_400,
+    )
+
 
 # Compatibility constants
 BG_APP = LIGHT_BG

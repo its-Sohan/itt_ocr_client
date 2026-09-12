@@ -1,6 +1,8 @@
 import flet as ft
 from src.styles import theme, RADIUS_GLASS, RADIUS_PANEL, FONT_FAMILY_UI
 from src.config_store import load_config, save_config
+from src.services.updater import check_for_updates, APP_VERSION, DEFAULT_RELEASE_REPO
+from src.components.update_dialog import create_update_dialog
 
 MASKED_PLACEHOLDER = "••••••••••••••••••••"
 
@@ -89,6 +91,94 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
         on_change=lambda e: theme.set_reduced_motion(e.control.value),
     )
 
+    check_updates_switch = ft.Switch(
+        label="Check for updates automatically on startup",
+        value=config.get("check_updates_on_startup", True),
+        active_color=theme.accent,
+    )
+
+    releases_repo_field = ft.TextField(
+        label="Releases Repository (GitHub owner/repo)",
+        value=config.get("releases_repo", DEFAULT_RELEASE_REPO),
+        border_color=theme.border,
+        focused_border_color=theme.accent,
+        text_size=12,
+        dense=True,
+        helper="Point to your public releases repository (e.g. its-Sohan/itt-ocr-releases)",
+        helper_style=ft.TextStyle(size=11, color=theme.text_secondary, font_family=FONT_FAMILY_UI),
+    )
+
+    update_status_text = ft.Text(
+        f"Installed version: v{APP_VERSION}",
+        size=11,
+        color=theme.text_secondary,
+        font_family=FONT_FAMILY_UI,
+    )
+
+    async def on_check_update_click(e):
+        update_status_text.value = "Checking for updates..."
+        update_status_text.update()
+        repo = releases_repo_field.value.strip() or DEFAULT_RELEASE_REPO
+        info = await check_for_updates(repo=repo, current_version=APP_VERSION)
+        if info.get("has_update"):
+            update_status_text.value = f"Update available: v{info.get('latest_version')}"
+            update_status_text.color = theme.accent
+            update_status_text.update()
+            update_dlg = create_update_dialog(page, info)
+            page.show_dialog(update_dlg)
+        elif info.get("error"):
+            update_status_text.value = f"Check failed: {info.get('error')}"
+            update_status_text.color = theme.text_secondary
+            update_status_text.update()
+        else:
+            update_status_text.value = f"You are on the latest version (v{APP_VERSION})"
+            update_status_text.color = theme.accent
+            update_status_text.update()
+
+    check_update_btn = ft.OutlinedButton(
+        "Check Now",
+        icon=ft.Icons.REFRESH_ROUNDED,
+        style=ft.ButtonStyle(
+            color=theme.text_primary,
+            shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+        ),
+        on_click=on_check_update_click,
+    )
+
+    update_section = ft.Container(
+        bgcolor=theme.surface,
+        border=ft.Border.all(1, theme.border),
+        border_radius=RADIUS_PANEL,
+        padding=12,
+        content=ft.Column(
+            spacing=10,
+            controls=[
+                ft.Row(
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    controls=[
+                        ft.Column(
+                            spacing=2,
+                            controls=[
+                                ft.Text(
+                                    "App Updates",
+                                    size=13,
+                                    weight=ft.FontWeight.W_600,
+                                    color=theme.text_primary,
+                                    font_family=FONT_FAMILY_UI,
+                                ),
+                                update_status_text,
+                            ],
+                        ),
+                        check_update_btn,
+                    ],
+                ),
+                releases_repo_field,
+                check_updates_switch,
+            ],
+        ),
+    )
+
     def on_close(e):
         page.pop_dialog()
 
@@ -100,6 +190,8 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
         config["default_output_mode"] = default_mode_dropdown.value or "document"
         config["auto_extract"] = auto_extract_switch.value
         config["reduced_motion"] = reduced_motion_switch.value
+        config["releases_repo"] = releases_repo_field.value.strip() or DEFAULT_RELEASE_REPO
+        config["check_updates_on_startup"] = check_updates_switch.value
         save_config(config)
         theme.set_reduced_motion(reduced_motion_switch.value)
         if on_saved:
@@ -262,16 +354,51 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
         else:
             commit_save(final_api_key, final_base_url)
 
+    _is_configured = bool(saved_api_key)
+    _status_color = theme.success if _is_configured else theme.text_secondary
     title_row = ft.Row(
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         vertical_alignment=ft.CrossAxisAlignment.CENTER,
         controls=[
-            ft.Text(
-                "Settings",
-                size=16,
-                weight=ft.FontWeight.W_600,
-                color=theme.text_primary,
-                font_family=FONT_FAMILY_UI,
+            ft.Column(
+                spacing=2,
+                controls=[
+                    ft.Text("SETTINGS", size=10, weight=ft.FontWeight.W_600, color=theme.text_secondary, font_family=FONT_FAMILY_UI),
+                    ft.Row(
+                        spacing=10,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        controls=[
+                            ft.Text(
+                                "Settings",
+                                size=16,
+                                weight=ft.FontWeight.W_700,
+                                color=theme.text_primary,
+                                font_family=FONT_FAMILY_UI,
+                            ),
+                            ft.Container(
+                                content=ft.Row(
+                                    spacing=6,
+                                    tight=True,
+                                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                                    controls=[
+                                        ft.Container(width=8, height=8, border_radius=4, bgcolor=_status_color),
+                                        ft.Text(
+                                            "Connected" if _is_configured else "Not configured",
+                                            size=11,
+                                            weight=ft.FontWeight.W_600,
+                                            color=_status_color,
+                                            font_family=FONT_FAMILY_UI,
+                                        ),
+                                    ],
+                                ),
+                                bgcolor=theme.inset,
+                                border=ft.Border.all(1, _status_color if _is_configured else theme.border),
+                                border_radius=20,
+                                padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+                            ),
+                        ],
+                    ),
+                ],
             ),
             ft.IconButton(
                 icon=ft.Icons.CLOSE_ROUNDED,
@@ -281,6 +408,43 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
                 on_click=on_close,
             ),
         ],
+    )
+
+    def _section_label(text: str):
+        return ft.Text(text, size=10, weight=ft.FontWeight.W_600, color=theme.text_secondary, font_family=FONT_FAMILY_UI)
+
+    credentials_card = ft.Container(
+        bgcolor=theme.surface,
+        border=ft.Border.all(1, theme.border),
+        border_radius=RADIUS_PANEL,
+        padding=12,
+        content=ft.Column(
+            spacing=10,
+            controls=[
+                _section_label("CONNECTION"),
+                session_field,
+                api_key_field,
+                base_url_field,
+                credential_actions_row,
+            ],
+        ),
+    )
+
+    behavior_card = ft.Container(
+        bgcolor=theme.surface,
+        border=ft.Border.all(1, theme.border),
+        border_radius=RADIUS_PANEL,
+        padding=12,
+        content=ft.Column(
+            spacing=10,
+            controls=[
+                _section_label("BEHAVIOR"),
+                model_field,
+                default_mode_dropdown,
+                auto_extract_switch,
+                reduced_motion_switch,
+            ],
+        ),
     )
 
     content_box = ft.Container(
@@ -302,14 +466,9 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
                     color=theme.text_secondary,
                     font_family=FONT_FAMILY_UI,
                 ),
-                session_field,
-                api_key_field,
-                base_url_field,
-                credential_actions_row,
-                model_field,
-                default_mode_dropdown,
-                auto_extract_switch,
-                reduced_motion_switch,
+                credentials_card,
+                behavior_card,
+                update_section,
                 ft.Row(
                     alignment=ft.MainAxisAlignment.END,
                     spacing=8,
