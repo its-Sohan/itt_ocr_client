@@ -1,23 +1,56 @@
 import flet as ft
 
-# Color Palette derived from Figma
-BG_APP = "#FEFFED"           # Soft warm cream background
-BG_PANEL = "#FFFFFF"         # Main cards / panels
-BG_SUBTLE = "#FCFCF6"        # Inner workspace container fill
-BG_MUTED = "#F9FAFB"         # File row / dropzone background
-BG_PILL = "#F3F4F6"          # Pill badge fill
-BG_SUCCESS_PILL = "#ECFDF5"  # Ready status badge fill
+# Swiss Precision / Minimalist Editorial Design System
+# Neutral monochrome foundations with crisp micro-contrasts and subtle electric accents
 
-BORDER_COLOR = "#E5E7EB"     # Light gray border
-BORDER_DASHED = "#D1D5DB"    # Upload dropzone dashed border
+BG_APP = "#FBFBFA"           # Editorial off-white / bone canvas
+BG_PANEL = "#FFFFFF"         # Crisp paper cards
+BG_SUBTLE = "#F6F6F4"        # Architectural muted fill
+BG_MUTED = "#F0F0ED"         # Micro-section and dropzone fill
+BG_ACTIVE = "#EAEAE6"        # Active container / pressed state
 
-TEXT_PRIMARY = "#111827"     # Dark slate primary text
-TEXT_SECONDARY = "#6B7280"   # Neutral secondary text
-TEXT_TERTIARY = "#9CA3AF"    # Placeholder text
-TEXT_MUTED = "#374151"       # Badge text
-TEXT_SUCCESS = "#047857"     # Green ready status text
+# Crisp Micro-Borders
+BORDER_COLOR = "#E2E2DC"     # Architectural fine rule (1px)
+BORDER_FOCUS = "#18181B"     # High-contrast focus state
+BORDER_DASHED = "#CBCBC4"    # Subtle geometric dashed border
 
-BTN_PRIMARY_BG = "#111827"   # Black / Dark navy button
-BTN_PRIMARY_TEXT = "#FFFFFF" # White text
+# Typographic System
+FONT_PRIMARY = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+FONT_MONO = "'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace"
 
-NAV_RAIL_BG = "#F3F3F3"      # Left rail strip background
+TEXT_PRIMARY = "#111827"     # Deep carbon black
+TEXT_SECONDARY = "#52525B"   # Neutral graphite
+TEXT_TERTIARY = "#71717A"    # Subdued label text
+TEXT_MUTED = "#A1A1AA"       # Placeholder and caption text
+
+# Editorial Status / Accents
+ACCENT_ELECTRIC = "#2563EB"  # Electric precision blue
+ACCENT_ELECTRIC_BG = "#EFF6FF"
+ACCENT_ELECTRIC_BORDER = "#BFDBFE"
+
+STATUS_READY_BG = "#F4F4F5"
+STATUS_READY_TEXT = "#3F3F46"
+
+STATUS_SUCCESS_BG = "#ECFDF5"
+STATUS_SUCCESS_TEXT = "#059669"
+STATUS_SUCCESS_BORDER = "#A7F3D0"
+
+STATUS_PROC_BG = "#FEF3C7"
+STATUS_PROC_TEXT = "#B45309"
+STATUS_PROC_BORDER = "#FDE68A"
+
+STATUS_ERR_BG = "#FEF2F2"
+STATUS_ERR_TEXT = "#DC2626"
+STATUS_ERR_BORDER = "#FECACA"
+
+# Buttons & Surfaces
+BTN_PRIMARY_BG = "#18181B"   # Pure carbon black button
+BTN_PRIMARY_HOVER = "#27272A"
+BTN_PRIMARY_TEXT = "#FFFFFF"
+
+BTN_SECONDARY_BG = "#FFFFFF"
+BTN_SECONDARY_BORDER = "#D4D4D8"
+BTN_SECONDARY_TEXT = "#18181B"
+
+NAV_RAIL_BG = "#F4F4F0"      # Tactile left vertical anchor bar
+NAV_RAIL_BORDER = "#E5E5DF"
