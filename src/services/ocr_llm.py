@@ -183,7 +183,11 @@ async def extract_text_with_llm(file_path: str, mode: str = "document", model: O
         update_usage_stats(characters=0, success=False)
         raise RuntimeError(f"LLM API Error ({response.status_code}): {error_detail}")
 
-    result_json = response.json()
+    try:
+        result_json = response.json()
+    except Exception:
+        update_usage_stats(characters=0, success=False)
+        raise RuntimeError("The vision server sent an unclear reply. Please try again.")
     choices = result_json.get("choices", [])
     if not choices:
         update_usage_stats(characters=0, success=False)

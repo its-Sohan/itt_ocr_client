@@ -337,14 +337,22 @@ class PreviewPanel(ft.Container):
             self.floating_toolbar.opacity = 0.0
         safe_update(self.floating_toolbar)
 
+    def _rotation_animation(self):
+        # Reduced motion: snap instead of easing.
+        if theme.reduced_motion:
+            return None
+        return ft.Animation(250, ft.AnimationCurve.EASE_OUT)
+
     def rotate_image(self, e):
         self.rotation_degrees = (self.rotation_degrees + 90) % 360
         radians = self.rotation_degrees * (math.pi / 180.0)
+        self.image_control.animate_rotation = self._rotation_animation()
         self.image_control.rotate = ft.Rotate(angle=radians)
         safe_update(self.image_control)
 
     def reset_rotation(self, e):
         self.rotation_degrees = 0
+        self.image_control.animate_rotation = self._rotation_animation()
         self.image_control.rotate = ft.Rotate(angle=0)
         safe_update(self.image_control)
 
@@ -514,7 +522,7 @@ class PreviewPanel(ft.Container):
         self.scan_line.bgcolor = theme.accent
 
         self.audit_focus_box.border = ft.Border.all(1.5, theme.accent)
-        self.audit_focus_box.bgcolor = "rgba(37, 99, 235, 0.10)" if not theme.is_dark else "rgba(75, 136, 240, 0.16)"
+        self.audit_focus_box.bgcolor = theme.accent_soft
         self.audit_badge.bgcolor = theme.surface
         self.audit_badge.border = ft.Border.all(1, theme.accent)
         self.audit_badge_text.color = theme.accent
@@ -523,6 +531,11 @@ class PreviewPanel(ft.Container):
         self.floating_toolbar.bgcolor = theme.glass_bg
         self.floating_toolbar.border = theme.glass_border
         self.floating_toolbar.shadow = theme.glass_shadow
+        # Reduced motion: fades and slides snap instead of animating.
+        no_anim = theme.reduced_motion
+        self.image_control.animate_rotation = None if no_anim else ft.Animation(250, ft.AnimationCurve.EASE_OUT)
+        self.floating_toolbar.animate_opacity = None if no_anim else ft.Animation(150, ft.AnimationCurve.EASE_OUT)
+        self.audit_overlay_container.animate_align = None if no_anim else ft.Animation(180, ft.AnimationCurve.EASE_OUT)
         self.rotate_btn.icon_color = theme.text_primary
         self.reset_rotate_btn.icon_color = theme.text_secondary
         self.fit_btn.icon_color = theme.text_secondary

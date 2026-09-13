@@ -1,7 +1,7 @@
 import asyncio
 import os
 import flet as ft
-from src.styles import theme, FONT_FAMILY_UI, RADIUS_GLASS, RADIUS_PANEL, unfreeze
+from src.styles import theme, FONT_FAMILY_UI, RADIUS_GLASS, RADIUS_PANEL, unfreeze, primary_button_style
 from src.app_state import state
 from src.config_store import load_config
 from src.components.top_bar import create_top_bar
@@ -13,7 +13,7 @@ from src.components.command_palette import create_command_palette
 from src.services.scanner import scan_document
 from src.services.ocr_llm import extract_text_with_llm
 from src.services.clipboard import get_clipboard_image
-from src.services.updater import check_for_updates, APP_VERSION, DEFAULT_RELEASE_REPO
+from src.services.updater import check_for_updates, check_pending_update_result, APP_VERSION, DEFAULT_RELEASE_REPO
 from src.components.update_dialog import create_update_dialog
 
 def main(page: ft.Page):
@@ -22,12 +22,12 @@ def main(page: ft.Page):
     page.padding = 0
     page.theme_mode = ft.ThemeMode.DARK if theme.is_dark else ft.ThemeMode.LIGHT
 
-    # Set up Typography
+    # Set up Typography (paths are relative to assets_dir="src/assets")
     page.fonts = {
-        "Inter": "assets/fonts/Inter-Regular.ttf",
-        "JetBrains Mono": "assets/fonts/JetBrainsMono-Regular.ttf",
-        "Noto Sans Bengali": "assets/fonts/NotoSansBengali-Regular.ttf",
-        "Kalpurush": "assets/fonts/kalpurush.ttf",
+        "Inter": "fonts/Inter-Regular.ttf",
+        "JetBrains Mono": "fonts/JetBrainsMono-Regular.ttf",
+        "Noto Sans Bengali": "fonts/NotoSansBengali-Regular.ttf",
+        "Kalpurush": "fonts/kalpurush.ttf",
     }
     page.theme = ft.Theme(font_family=FONT_FAMILY_UI)
 
@@ -36,7 +36,7 @@ def main(page: ft.Page):
     page.window.min_height = 600
     page.window.width = 1380
     page.window.height = 860
-    page.window.icon = "assets/app_icon.png"
+    page.window.icon = "app_icon.png"
 
     # Initialize default output mode + quality from saved user settings
     initial_config = load_config()
@@ -45,6 +45,12 @@ def main(page: ft.Page):
     if _saved_quality in ("standard", "high"):
         state.active_quality = _saved_quality
 
+    # NOTE: do NOT add this to page.overlay. FilePicker is a Service, not a
+    # visual control: constructing it auto-registers it with the page's
+    # service registry, and putting it in the visual tree makes the client
+    # render a red "Unknown control: FilePicker" error instead.
+    # Keep this strong reference alive (closures below capture file_picker);
+    # unreferenced services are automatically unregistered.
     file_picker = ft.FilePicker()
 
     # Modals
@@ -94,8 +100,8 @@ def main(page: ft.Page):
         except Exception as ex:
             page.show_dialog(
                 ft.SnackBar(
-                    content=ft.Text(f"File picker error: {str(ex)}"),
-                    bgcolor="#EF4444",
+                    content=ft.Text("Couldn't open the file picker. Please try again."),
+                    bgcolor=theme.error,
                 )
             )
 
@@ -213,13 +219,7 @@ def main(page: ft.Page):
                                     ),
                                     ft.ElevatedButton(
                                         "Browse scanned file",
-                                        style=ft.ButtonStyle(
-                                            bgcolor=theme.accent,
-                                            color="#FFFFFF",
-                                            shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
-                                            padding=ft.Padding.symmetric(horizontal=14, vertical=10),
-                                            side=ft.BorderSide(2, theme.accent),
-                                        ),
+                                        style=primary_button_style(),
                                         on_click=on_browse_from_modal,
                                     ),
                                 ],
@@ -299,7 +299,7 @@ def main(page: ft.Page):
                         size=13,
                         color="#FFFFFF",
                     ),
-                    bgcolor="#EF4444",
+                    bgcolor=theme.error,
                     duration=5000,
                 )
             )
@@ -323,6 +323,15 @@ def main(page: ft.Page):
 
     # Batch extraction for all pending items
     async def run_all_pending_async():
+        if state.is_processing_all:
+            page.show_dialog(
+                ft.SnackBar(
+                    content=ft.Text("A batch extraction is already running.", color=theme.text_secondary),
+                    bgcolor=theme.glass_bg,
+                    duration=2000,
+                )
+            )
+            return
         pending_items = [
             item for item in state.queue
             if item.status in ("Ready", "Failed")
@@ -338,21 +347,56 @@ def main(page: ft.Page):
             return
 
         total = len(pending_items)
-        page.show_dialog(
-            ft.SnackBar(
-                content=ft.Text(f"Starting batch extraction for {total} document{'s' if total != 1 else ''}...", color=theme.text_primary),
-                bgcolor=theme.glass_bg,
-                duration=2500,
-            )
+        state.is_processing_all = True
+        state.notify()
+        progress_snack = ft.SnackBar(
+            content=ft.Text(
+                f"Starting batch extraction for {total} document{'s' if total != 1 else ''}...",
+                color=theme.text_primary,
+            ),
+            bgcolor=theme.glass_bg,
+            duration=120000,
         )
+        page.show_dialog(progress_snack)
 
-        for item in pending_items:
-            state.select_item(item.id)
-            await extract_item_async(item)
+        def _set_progress(message: str):
+            try:
+                progress_snack.content.value = message
+                progress_snack.update()
+            except Exception:
+                pass
 
+        def _dismiss_progress():
+            # Only pop if ours is still on top (never steal another dialog).
+            try:
+                dialogs = getattr(getattr(page, "_dialogs", None), "controls", [])
+                if dialogs and dialogs[-1] is progress_snack:
+                    page.pop_dialog()
+            except Exception:
+                pass
+
+        processed = 0
+        try:
+            for idx, item in enumerate(pending_items, 1):
+                if not state.is_processing_all:
+                    break
+                state.select_item(item.id)
+                _set_progress(f"Extracting {idx} of {total}… (Stop in History to cancel)")
+                await extract_item_async(item)
+                processed += 1
+        finally:
+            cancelled = not state.is_processing_all
+            state.is_processing_all = False
+            state.notify()
+
+        _dismiss_progress()
+        if cancelled:
+            summary = f"Batch stopped ({processed} of {total} done)"
+        else:
+            summary = f"Batch extraction complete ({total} processed)"
         page.show_dialog(
             ft.SnackBar(
-                content=ft.Text(f"Batch extraction complete ({total} processed)", color=theme.text_primary),
+                content=ft.Text(summary, color=theme.text_primary),
                 bgcolor=theme.glass_bg,
                 duration=3000,
             )
@@ -457,13 +501,19 @@ def main(page: ft.Page):
             # Very narrow screen: collapse history and stack canvas + text panel
             if sidebar_comp.visible:
                 sidebar_comp.visible = False
+                sidebar_comp._auto_hidden = True
             main_panel_comp.set_stacked(True)
         elif width < 980:
             # Medium-narrow: collapse history rail to give side-by-side workspace ample room
             if sidebar_comp.visible:
                 sidebar_comp.visible = False
+                sidebar_comp._auto_hidden = True
             main_panel_comp.set_stacked(False)
         else:
+            # Restore the rail only if WE auto-hid it (never fight a manual toggle).
+            if getattr(sidebar_comp, "_auto_hidden", False):
+                sidebar_comp.visible = True
+                sidebar_comp._auto_hidden = False
             main_panel_comp.set_stacked(False)
         page.update()
 
@@ -505,6 +555,25 @@ def main(page: ft.Page):
         try:
             # Let initial frame render smoothly before checking
             await asyncio.sleep(1.5)
+            # Surface a failed replace from the previous run (helper .bat log).
+            try:
+                last_error = check_pending_update_result()
+            except Exception:
+                last_error = None
+            if last_error:
+                try:
+                    page.show_dialog(
+                        ft.SnackBar(
+                            content=ft.Text(
+                                "The last update couldn't finish — you're still on your previous version. Try updating again from Settings.",
+                                color=theme.text_primary,
+                            ),
+                            bgcolor=theme.glass_bg,
+                            duration=6000,
+                        )
+                    )
+                except Exception:
+                    pass
             cfg = load_config()
             if not cfg.get("check_updates_on_startup", True):
                 return

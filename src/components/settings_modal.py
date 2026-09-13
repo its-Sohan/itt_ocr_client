@@ -1,8 +1,14 @@
 import flet as ft
-from src.styles import theme, RADIUS_GLASS, RADIUS_PANEL, FONT_FAMILY_UI
+from src.styles import theme, RADIUS_GLASS, RADIUS_PANEL, FONT_FAMILY_UI, primary_button_style, secondary_button_style
 from src.config_store import load_config, save_config
 from src.services.updater import check_for_updates, APP_VERSION, DEFAULT_RELEASE_REPO
 from src.components.update_dialog import create_update_dialog
+from src.components.help_center import (
+    create_about_dialog,
+    create_terms_dialog,
+    create_privacy_dialog,
+    create_bug_report_dialog,
+)
 
 MASKED_PLACEHOLDER = "••••••••••••••••••••"
 
@@ -91,6 +97,13 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
         on_change=lambda e: theme.set_reduced_motion(e.control.value),
     )
 
+    theme_switch = ft.Switch(
+        label="Dark mode",
+        value=theme.is_dark,
+        active_color=theme.accent,
+        on_change=lambda e: theme.toggle_theme(),
+    )
+
     check_updates_switch = ft.Switch(
         label="Check for updates automatically on startup",
         value=config.get("check_updates_on_startup", True),
@@ -104,7 +117,7 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
         focused_border_color=theme.accent,
         text_size=12,
         dense=True,
-        helper="Point to your public releases repository (e.g. its-Sohan/itt-ocr-releases)",
+        helper="Point to your public releases repository (e.g. its-Sohan/itt-ocr-release)",
         helper_style=ft.TextStyle(size=11, color=theme.text_secondary, font_family=FONT_FAMILY_UI),
     )
 
@@ -116,32 +129,47 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
     )
 
     async def on_check_update_click(e):
-        update_status_text.value = "Checking for updates..."
-        update_status_text.update()
-        repo = releases_repo_field.value.strip() or DEFAULT_RELEASE_REPO
-        info = await check_for_updates(repo=repo, current_version=APP_VERSION)
-        if info.get("has_update"):
-            update_status_text.value = f"Update available: v{info.get('latest_version')}"
-            update_status_text.color = theme.accent
+        # Friendly, jargon-free status flow: checking -> ready / all-set / calm error.
+        check_update_btn.disabled = True
+        update_status_text.value = "Checking for updates…"
+        update_status_text.color = theme.text_secondary
+        try:
             update_status_text.update()
-            update_dlg = create_update_dialog(page, info)
-            page.show_dialog(update_dlg)
-        elif info.get("error"):
-            update_status_text.value = f"Check failed: {info.get('error')}"
-            update_status_text.color = theme.text_secondary
-            update_status_text.update()
-        else:
-            update_status_text.value = f"You are on the latest version (v{APP_VERSION})"
-            update_status_text.color = theme.accent
-            update_status_text.update()
+        except Exception:
+            pass
+        try:
+            repo = releases_repo_field.value.strip() or DEFAULT_RELEASE_REPO
+            info = await check_for_updates(repo=repo, current_version=APP_VERSION)
+        except Exception:
+            # check_for_updates never raises, but stay safe: no traceback to users.
+            info = {"has_update": False, "error": "Couldn't check just now. Please try again."}
+        try:
+            if info.get("has_update"):
+                update_status_text.value = f"A new version (v{info.get('latest_version')}) is ready."
+                update_status_text.color = theme.accent
+                update_status_text.update()
+                update_dlg = create_update_dialog(page, info)
+                page.show_dialog(update_dlg)
+            elif info.get("error"):
+                # Error strings from updater.py are already plain-English.
+                update_status_text.value = str(info.get("error"))
+                update_status_text.color = theme.text_secondary
+                update_status_text.update()
+            else:
+                update_status_text.value = "You're all set — you have the newest version."
+                update_status_text.color = theme.accent
+                update_status_text.update()
+        finally:
+            check_update_btn.disabled = False
+            try:
+                check_update_btn.update()
+            except Exception:
+                pass
 
     check_update_btn = ft.OutlinedButton(
         "Check Now",
         icon=ft.Icons.REFRESH_ROUNDED,
-        style=ft.ButtonStyle(
-            color=theme.text_primary,
-            shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
-        ),
+        style=secondary_button_style(),
         on_click=on_check_update_click,
     )
 
@@ -149,7 +177,7 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
         bgcolor=theme.surface,
         border=ft.Border.all(1, theme.border),
         border_radius=RADIUS_PANEL,
-        padding=12,
+        padding=16,
         content=ft.Column(
             spacing=10,
             controls=[
@@ -175,6 +203,64 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
                 ),
                 releases_repo_field,
                 check_updates_switch,
+            ],
+        ),
+    )
+
+    def _open_help(make):
+        page.show_dialog(make(page))
+
+    help_section = ft.Container(
+        bgcolor=theme.surface,
+        border=ft.Border.all(1, theme.border),
+        border_radius=RADIUS_PANEL,
+        padding=16,
+        content=ft.Column(
+            spacing=10,
+            controls=[
+                ft.Text(
+                    "HELP & LEGAL",
+                    size=10,
+                    weight=ft.FontWeight.W_600,
+                    color=theme.text_secondary,
+                    font_family=FONT_FAMILY_UI,
+                ),
+                ft.Text(
+                    f"ITT OCR v{APP_VERSION} — help, policies, and support live here.",
+                    size=12,
+                    color=theme.text_secondary,
+                    font_family=FONT_FAMILY_UI,
+                ),
+                ft.Row(
+                    spacing=8,
+                    wrap=True,
+                    controls=[
+                        ft.OutlinedButton(
+                            "About",
+                            icon=ft.Icons.INFO_OUTLINED,
+                            style=secondary_button_style(),
+                            on_click=lambda e: _open_help(create_about_dialog),
+                        ),
+                        ft.OutlinedButton(
+                            "Terms",
+                            icon=ft.Icons.DESCRIPTION_OUTLINED,
+                            style=secondary_button_style(),
+                            on_click=lambda e: _open_help(create_terms_dialog),
+                        ),
+                        ft.OutlinedButton(
+                            "Privacy",
+                            icon=ft.Icons.PRIVACY_TIP_OUTLINED,
+                            style=secondary_button_style(),
+                            on_click=lambda e: _open_help(create_privacy_dialog),
+                        ),
+                        ft.OutlinedButton(
+                            "Report a bug",
+                            icon=ft.Icons.BUG_REPORT_OUTLINED,
+                            style=secondary_button_style(),
+                            on_click=lambda e: _open_help(create_bug_report_dialog),
+                        ),
+                    ],
+                ),
             ],
         ),
     )
@@ -271,7 +357,7 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
                 change_notes.append("• Endpoint URL will be updated with new destination")
 
             confirm_box = ft.Container(
-                width=460,
+                width=520,
                 bgcolor=theme.glass_bg,
                 blur=theme.glass_blur,
                 border=theme.glass_border,
@@ -328,13 +414,7 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
                                 ),
                                 ft.ElevatedButton(
                                     "Confirm & Save",
-                                    style=ft.ButtonStyle(
-                                        bgcolor=theme.accent,
-                                        color="#FFFFFF",
-                                        shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
-                                        padding=ft.Padding.symmetric(horizontal=16, vertical=10),
-                                        side=ft.BorderSide(2, theme.accent),
-                                    ),
+                                    style=primary_button_style(),
                                     on_click=lambda ev: (page.pop_dialog(), commit_save(final_api_key, final_base_url)),
                                 ),
                             ],
@@ -414,12 +494,13 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
         return ft.Text(text, size=10, weight=ft.FontWeight.W_600, color=theme.text_secondary, font_family=FONT_FAMILY_UI)
 
     credentials_card = ft.Container(
+        expand=True,
         bgcolor=theme.surface,
         border=ft.Border.all(1, theme.border),
         border_radius=RADIUS_PANEL,
-        padding=12,
+        padding=16,
         content=ft.Column(
-            spacing=10,
+            spacing=12,
             controls=[
                 _section_label("CONNECTION"),
                 session_field,
@@ -431,69 +512,89 @@ def create_settings_modal(page: ft.Page, on_saved=None) -> ft.AlertDialog:
     )
 
     behavior_card = ft.Container(
+        expand=True,
         bgcolor=theme.surface,
         border=ft.Border.all(1, theme.border),
         border_radius=RADIUS_PANEL,
-        padding=12,
+        padding=16,
         content=ft.Column(
-            spacing=10,
+            spacing=12,
             controls=[
                 _section_label("BEHAVIOR"),
                 model_field,
                 default_mode_dropdown,
                 auto_extract_switch,
                 reduced_motion_switch,
+                theme_switch,
             ],
         ),
     )
 
+    # Two-column top row: connection left, behavior right. Cards top-align
+    # (they differ in height) and split the width via expand=True.
+    cards_row = ft.Row(
+        spacing=12,
+        vertical_alignment=ft.CrossAxisAlignment.START,
+        controls=[
+            credentials_card,
+            behavior_card,
+        ],
+    )
+
+    footer_row = ft.Row(
+        alignment=ft.MainAxisAlignment.END,
+        spacing=8,
+        controls=[
+            ft.TextButton(
+                "Cancel",
+                style=ft.ButtonStyle(
+                    color=theme.text_secondary,
+                    shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
+                ),
+                on_click=on_close,
+            ),
+            ft.ElevatedButton(
+                "Save",
+                style=primary_button_style(),
+                on_click=on_save_click,
+            ),
+        ],
+    )
+
+    # Scrollable body with a pinned footer: the dialog never overflows short
+    # windows, and Cancel/Save stay visible without scrolling.
+    body_scroll = ft.Column(
+        expand=True,
+        scroll=ft.ScrollMode.AUTO,
+        spacing=16,
+        controls=[
+            title_row,
+            ft.Text(
+                "Configure vision model API credentials. Stored secrets are masked and uncopyable.",
+                size=12,
+                color=theme.text_secondary,
+                font_family=FONT_FAMILY_UI,
+            ),
+            cards_row,
+            update_section,
+            help_section,
+        ],
+    )
+
     content_box = ft.Container(
-        width=520,
+        width=720,
+        height=600,
         bgcolor=theme.glass_bg,
         blur=theme.glass_blur,
         border=theme.glass_border,
         border_radius=RADIUS_GLASS,
         shadow=theme.glass_shadow,
-        padding=20,
+        padding=24,
         content=ft.Column(
-            tight=True,
-            spacing=14,
+            spacing=16,
             controls=[
-                title_row,
-                ft.Text(
-                    "Configure vision model API credentials. Stored secrets are masked and uncopyable.",
-                    size=12,
-                    color=theme.text_secondary,
-                    font_family=FONT_FAMILY_UI,
-                ),
-                credentials_card,
-                behavior_card,
-                update_section,
-                ft.Row(
-                    alignment=ft.MainAxisAlignment.END,
-                    spacing=8,
-                    controls=[
-                        ft.TextButton(
-                            "Cancel",
-                            style=ft.ButtonStyle(
-                                color=theme.text_secondary,
-                                shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
-                            ),
-                            on_click=on_close,
-                        ),
-                        ft.ElevatedButton(
-                            "Save",
-                            style=ft.ButtonStyle(
-                                bgcolor=theme.accent,
-                                color="#FFFFFF",
-                                shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
-                                padding=ft.Padding.symmetric(horizontal=18, vertical=10),
-                                side=ft.BorderSide(2, theme.accent),
-                            ),
-                            on_click=on_save_click,
-                        ),
-                    ],
-                ),
+                body_scroll,
+                footer_row,
             ],
         ),
     )

@@ -1,7 +1,15 @@
+import os
+
 import flet as ft
 from src.styles import theme, RADIUS_GLASS, RADIUS_PANEL, FONT_FAMILY_UI
 from src.app_state import state
 from src.services.clipboard import copy_text_to_clipboard
+from src.components.help_center import (
+    create_about_dialog,
+    create_terms_dialog,
+    create_privacy_dialog,
+    create_bug_report_dialog,
+)
 from src.services.text_transforms import (
     convert_digits_to_english,
     convert_digits_to_bengali,
@@ -165,6 +173,30 @@ def create_command_palette(
             "desc": "Remove completed items from history list",
             "action": lambda: (page.pop_dialog(), state.clear_completed()),
         },
+        {
+            "icon": ft.Icons.BUG_REPORT_OUTLINED,
+            "title": "Report a bug",
+            "desc": "Save a diagnostic file on your computer to send to support",
+            "action": lambda: (page.pop_dialog(), page.show_dialog(create_bug_report_dialog(page))),
+        },
+        {
+            "icon": ft.Icons.INFO_OUTLINED,
+            "title": "About this app",
+            "desc": "Version, policies, and support",
+            "action": lambda: (page.pop_dialog(), page.show_dialog(create_about_dialog(page))),
+        },
+        {
+            "icon": ft.Icons.DESCRIPTION_OUTLINED,
+            "title": "Terms of Service",
+            "desc": "Read the app's terms of use",
+            "action": lambda: (page.pop_dialog(), page.show_dialog(create_terms_dialog(page))),
+        },
+        {
+            "icon": ft.Icons.PRIVACY_TIP_OUTLINED,
+            "title": "Privacy Policy",
+            "desc": "What the app stores and sends",
+            "action": lambda: (page.pop_dialog(), page.show_dialog(create_privacy_dialog(page))),
+        },
     ]
 
     results_column = ft.Column(spacing=2, scroll=ft.ScrollMode.AUTO, expand=True)
@@ -194,7 +226,7 @@ def create_command_palette(
         else:
             page.show_dialog(
                 ft.SnackBar(
-                    content=ft.Text("No extracted text to format", size=13, color=theme.text_secondary),
+                    content=ft.Text("Nothing to format yet — extract text first.", size=13, color=theme.text_secondary),
                     bgcolor=theme.glass_bg,
                     duration=1500,
                 )
@@ -207,7 +239,7 @@ def create_command_palette(
             if not res:
                 p.show_dialog(
                     ft.SnackBar(
-                        content=ft.Text("No invoice table or total rows found in document.", size=13, color=theme.text_secondary),
+                        content=ft.Text("No table with a total found in this document.", size=13, color=theme.text_secondary),
                         bgcolor=theme.glass_bg,
                         duration=2000,
                     )
@@ -215,7 +247,7 @@ def create_command_palette(
             elif res["matched"]:
                 p.show_dialog(
                     ft.SnackBar(
-                        content=ft.Text(f"✓ Verified! All items sum up to total: {res['total']:,.2f}", size=13, weight=ft.FontWeight.W_500, color="#10B981"),
+                        content=ft.Text(f"✓ Verified! All items sum up to total: {res['total']:,.2f}", size=13, weight=ft.FontWeight.W_500, color=theme.success),
                         bgcolor=theme.glass_bg,
                         duration=3000,
                     )
@@ -223,14 +255,14 @@ def create_command_palette(
             else:
                 p.show_dialog(
                     ft.SnackBar(
-                        content=ft.Text(f"⚠ Mismatch: Items sum ({res['calculated']:,.2f}) vs Stated total ({res['total']:,.2f})", size=13, weight=ft.FontWeight.W_500, color="#F59E0B"),
+                        content=ft.Text(f"⚠ Mismatch: Items sum ({res['calculated']:,.2f}) vs Stated total ({res['total']:,.2f})", size=13, weight=ft.FontWeight.W_500, color=theme.warning),
                         bgcolor=theme.glass_bg,
                         duration=3000,
                     )
                 )
         else:
             p.show_dialog(
-                ft.SnackBar(content=ft.Text("No extracted text to verify", size=13, color=theme.text_secondary), bgcolor=theme.glass_bg)
+                ft.SnackBar(content=ft.Text("Nothing to check yet — extract text first.", size=13, color=theme.text_secondary), bgcolor=theme.glass_bg)
             )
 
     def _copy_active_text(p: ft.Page):
@@ -251,7 +283,7 @@ def create_command_palette(
             try:
                 p.show_dialog(
                     ft.SnackBar(
-                        content=ft.Text("No extracted text to copy", size=13, color=theme.text_secondary),
+                        content=ft.Text("Nothing to copy yet — extract text first.", size=13, color=theme.text_secondary),
                         bgcolor=theme.glass_bg,
                         duration=1500,
                     )
@@ -295,7 +327,7 @@ def create_command_palette(
                     state.notify()
                     p.show_dialog(
                         ft.SnackBar(
-                            content=ft.Text(f"AI aligned {len(boxes)} paragraph coordinates with pinpoint accuracy!", size=13, color="#10B981"),
+                            content=ft.Text(f"Aligned {len(boxes)} paragraphs with the scanned image.", size=13, color=theme.success),
                             bgcolor=theme.glass_bg,
                             duration=2500,
                         )
@@ -303,14 +335,14 @@ def create_command_palette(
                 else:
                     p.show_dialog(
                         ft.SnackBar(
-                            content=ft.Text("AI returned no boxes, using paper bounds.", size=13, color=theme.text_secondary),
+                            content=ft.Text("Couldn't pinpoint paragraphs — showing the full page instead.", size=13, color=theme.text_secondary),
                             bgcolor=theme.glass_bg,
                         )
                     )
             except Exception as ex:
                 p.show_dialog(
                     ft.SnackBar(
-                        content=ft.Text(f"AI alignment failed: {str(ex)}", size=13, color="#EF4444"),
+                        content=ft.Text("Couldn't align paragraphs — showing the full page instead.", size=13, color=theme.error),
                         bgcolor=theme.glass_bg,
                     )
                 )
@@ -347,7 +379,10 @@ def create_command_palette(
         for cmd in filtered:
             results_column.controls.append(render_command_item(cmd))
         if page:
-            page.update()
+            try:
+                page.update()
+            except Exception:
+                pass
 
     def on_search_change(e):
         populate(search_field.value)

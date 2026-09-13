@@ -1,5 +1,5 @@
 import flet as ft
-from src.styles import theme, RADIUS_PANEL, FONT_FAMILY_UI, safe_update, unfreeze
+from src.styles import theme, RADIUS_PANEL, FONT_FAMILY_UI, safe_update, unfreeze, secondary_button_style
 from src.app_state import state, QueueItem
 
 class Sidebar(ft.Container):
@@ -39,7 +39,7 @@ class Sidebar(ft.Container):
             icon_size=17,
             icon_color=theme.accent,
             tooltip="Extract all pending (batch)",
-            on_click=self.on_run_all_click,
+            on_click=self._on_run_all_click,
         )
 
         self.clear_btn = ft.IconButton(
@@ -93,12 +93,7 @@ class Sidebar(ft.Container):
                 tight=True,
                 controls=[self.browse_icon, self.browse_text],
             ),
-            style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
-                side=ft.BorderSide(1, theme.border),
-                padding=ft.Padding.symmetric(horizontal=6, vertical=7),
-                bgcolor=theme.button_bg,
-            ),
+            style=secondary_button_style(),
             expand=True,
             on_click=self.on_browse_click,
             tooltip="Browse image files (Ctrl+O)",
@@ -113,12 +108,7 @@ class Sidebar(ft.Container):
                 tight=True,
                 controls=[self.scan_icon, self.scan_text],
             ),
-            style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
-                side=ft.BorderSide(1, theme.border),
-                padding=ft.Padding.symmetric(horizontal=6, vertical=7),
-                bgcolor=theme.button_bg,
-            ),
+            style=secondary_button_style(),
             expand=True,
             on_click=self.on_scan_click,
             tooltip="Scan from hardware device",
@@ -133,12 +123,7 @@ class Sidebar(ft.Container):
                 tight=True,
                 controls=[self.paste_icon, self.paste_text],
             ),
-            style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
-                side=ft.BorderSide(1, theme.border),
-                padding=ft.Padding.symmetric(horizontal=6, vertical=7),
-                bgcolor=theme.button_bg,
-            ),
+            style=secondary_button_style(),
             expand=True,
             on_click=self.on_paste_click,
             tooltip="Paste image from clipboard (Ctrl+V)",
@@ -216,17 +201,25 @@ class Sidebar(ft.Container):
         self.visible = not self.visible
         safe_update(self)
 
+    def _on_run_all_click(self, e):
+        # While a batch is running this button becomes Stop.
+        if state.is_processing_all:
+            state.is_processing_all = False
+            state.notify()
+        elif self.on_run_all_click:
+            self.on_run_all_click(e)
+
     def _render_item(self, item: QueueItem) -> ft.Container:
         is_selected = (state.selected_item_id == item.id)
 
         if item.status == "Done":
-            status_color = "#10B981" if not theme.is_dark else "#34D399"
+            status_color = theme.success
             status_label = "Done"
         elif item.status == "Processing":
             status_color = theme.accent
             status_label = "Processing"
         elif item.status == "Failed":
-            status_color = "#EF4444" if not theme.is_dark else "#F87171"
+            status_color = theme.error
             status_label = "Failed"
         else:
             status_color = theme.text_secondary
@@ -292,6 +285,14 @@ class Sidebar(ft.Container):
         count = len(all_items)
         self.count_text.value = f"{count} item{'s' if count != 1 else ''}"
 
+        # Batch affordance: play becomes stop while a batch is running.
+        if state.is_processing_all:
+            self.run_all_btn.icon = ft.Icons.STOP_CIRCLE_OUTLINED
+            self.run_all_btn.tooltip = "Stop batch extraction"
+        else:
+            self.run_all_btn.icon = ft.Icons.PLAY_CIRCLE_OUTLINE_ROUNDED
+            self.run_all_btn.tooltip = "Extract all pending (batch)"
+
         # Apply search filter
         if self.search_filter:
             display_items = [
@@ -321,6 +322,13 @@ class Sidebar(ft.Container):
                                 color=theme.text_secondary,
                                 font_family=FONT_FAMILY_UI,
                             ),
+                            ft.Text(
+                                "Use Browse, Scan or Paste above to add your first document.",
+                                size=11,
+                                color=theme.text_secondary,
+                                text_align=ft.TextAlign.CENTER,
+                                font_family=FONT_FAMILY_UI,
+                            ),
                         ],
                     ),
                 )
@@ -344,30 +352,15 @@ class Sidebar(ft.Container):
         self.dropzone_container.bgcolor = theme.inset
         self.dropzone_container.border = ft.Border.all(1, theme.border)
 
-        self.browse_btn.style = ft.ButtonStyle(
-            shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
-            side=ft.BorderSide(1, theme.border),
-            padding=ft.Padding.symmetric(horizontal=6, vertical=7),
-            bgcolor=theme.button_bg,
-        )
+        self.browse_btn.style = secondary_button_style()
         self.browse_icon.color = theme.text_primary
         self.browse_text.color = theme.text_primary
 
-        self.scan_btn.style = ft.ButtonStyle(
-            shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
-            side=ft.BorderSide(1, theme.border),
-            padding=ft.Padding.symmetric(horizontal=6, vertical=7),
-            bgcolor=theme.button_bg,
-        )
+        self.scan_btn.style = secondary_button_style()
         self.scan_icon.color = theme.text_primary
         self.scan_text.color = theme.text_primary
 
-        self.paste_btn.style = ft.ButtonStyle(
-            shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
-            side=ft.BorderSide(1, theme.border),
-            padding=ft.Padding.symmetric(horizontal=6, vertical=7),
-            bgcolor=theme.button_bg,
-        )
+        self.paste_btn.style = secondary_button_style()
         self.paste_icon.color = theme.text_primary
         self.paste_text.color = theme.text_primary
 

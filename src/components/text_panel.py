@@ -10,6 +10,7 @@ from src.styles import (
     SPACE_SM,
     SPACE_MD,
     contains_bengali,
+    primary_button_style,
     safe_update,
     unfreeze,
 )
@@ -201,9 +202,9 @@ class ParagraphBlock(ft.Container):
     def _handle_copy_click(self, e):
         self.copy_icon.icon = ft.Icons.CHECK_ROUNDED
         self.copy_icon.name = ft.Icons.CHECK_ROUNDED
-        self.copy_icon.color = "#10B981" if not theme.is_dark else "#34D399"
+        self.copy_icon.color = theme.success
         self.copy_label.value = "Copied"
-        self.copy_label.color = "#10B981" if not theme.is_dark else "#34D399"
+        self.copy_label.color = theme.success
         safe_update(self)
         p = getattr(e, "page", None) or getattr(getattr(e, "control", None), "page", None) or get_page(self)
         if self.on_copy:
@@ -307,8 +308,8 @@ class TextPanel(ft.Container):
         self._undo_stack = []
 
         # Local Invoice Math Validation Chip
-        self.math_chip_icon = ft.Icon(ft.Icons.CHECK_CIRCLE_ROUNDED, size=12, color="#10B981")
-        self.math_chip_text = ft.Text("", size=11, weight=ft.FontWeight.W_500, color="#10B981", font_family=FONT_FAMILY_UI)
+        self.math_chip_icon = ft.Icon(ft.Icons.CHECK_CIRCLE_ROUNDED, size=12, color=theme.success)
+        self.math_chip_text = ft.Text("", size=11, weight=ft.FontWeight.W_500, color=theme.success, font_family=FONT_FAMILY_UI)
         self.math_chip = ft.Container(
             visible=False,
             padding=ft.Padding.symmetric(horizontal=8, vertical=3),
@@ -545,12 +546,7 @@ class TextPanel(ft.Container):
                     self.extract_label,
                 ],
             ),
-            style=ft.ButtonStyle(
-                bgcolor=theme.accent,
-                shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
-                padding=ft.Padding.symmetric(horizontal=12, vertical=6),
-                side=ft.BorderSide(2, theme.accent),
-            ),
+            style=primary_button_style(),
             on_click=self.on_extract_click,
             tooltip="Extract text from document (Ctrl+Enter)",
         )
@@ -648,8 +644,8 @@ class TextPanel(ft.Container):
         icon_color = theme.accent
         divider_color = theme.border
         sec_text_color = theme.text_secondary
-        green_color = "#34D399" if theme.is_dark else "#059669"
-        undo_color = "#FBBF24" if theme.is_dark else "#D97706"
+        green_color = theme.success
+        undo_color = theme.warning
         is_audit = state.audit_mode
         audit_tag_bg = theme.accent if is_audit else "transparent"
         audit_tag_color = "#FFFFFF" if is_audit else sec_text_color
@@ -776,7 +772,7 @@ class TextPanel(ft.Container):
         if not curr_text:
             if p:
                 p.show_dialog(
-                    ft.SnackBar(content=ft.Text("No text to format", size=13, color=theme.text_secondary), bgcolor=theme.glass_bg)
+                    ft.SnackBar(content=ft.Text("Nothing to format yet — extract text first.", size=13, color=theme.text_secondary), bgcolor=theme.glass_bg)
                 )
             return
 
@@ -866,22 +862,22 @@ class TextPanel(ft.Container):
 
         if res["matched"]:
             self.math_chip.bgcolor = "rgba(16, 185, 129, 0.12)"
-            self.math_chip.border = ft.Border.all(1, "#10B981")
+            self.math_chip.border = ft.Border.all(1, theme.success)
             self.math_chip_icon.icon = ft.Icons.CHECK_CIRCLE_ROUNDED
             self.math_chip_icon.name = ft.Icons.CHECK_CIRCLE_ROUNDED
-            self.math_chip_icon.color = "#10B981"
+            self.math_chip_icon.color = theme.success
             self.math_chip_text.value = f"Math verified ({res['total']:,.0f})"
-            self.math_chip_text.color = "#10B981"
+            self.math_chip_text.color = theme.success
             self.math_chip.tooltip = f"Invoice total {res['total']:,.2f} matches sum of items"
             self.math_chip.visible = True
         else:
             self.math_chip.bgcolor = "rgba(245, 158, 11, 0.12)"
-            self.math_chip.border = ft.Border.all(1, "#F59E0B")
+            self.math_chip.border = ft.Border.all(1, theme.warning)
             self.math_chip_icon.icon = ft.Icons.WARNING_AMBER_ROUNDED
             self.math_chip_icon.name = ft.Icons.WARNING_AMBER_ROUNDED
-            self.math_chip_icon.color = "#F59E0B"
+            self.math_chip_icon.color = theme.warning
             self.math_chip_text.value = f"Math diff: {res['difference']:,.0f}"
-            self.math_chip_text.color = "#F59E0B"
+            self.math_chip_text.color = theme.warning
             self.math_chip.tooltip = f"Calculated sum ({res['calculated']:,.2f}) does not match stated total ({res['total']:,.2f})"
             self.math_chip.visible = True
 
@@ -892,7 +888,7 @@ class TextPanel(ft.Container):
         if not text:
             if p:
                 p.show_dialog(
-                    ft.SnackBar(content=ft.Text("No text to verify", size=13, color=theme.text_secondary), bgcolor=theme.glass_bg)
+                    ft.SnackBar(content=ft.Text("Nothing to check yet — extract text first.", size=13, color=theme.text_secondary), bgcolor=theme.glass_bg)
                 )
             return
 
@@ -901,7 +897,7 @@ class TextPanel(ft.Container):
             if p:
                 p.show_dialog(
                     ft.SnackBar(
-                        content=ft.Text("No invoice table or total rows found in document.", size=13, color=theme.text_secondary),
+                        content=ft.Text("No table with a total found in this document.", size=13, color=theme.text_secondary),
                         bgcolor=theme.glass_bg,
                         duration=2200,
                     )
@@ -915,10 +911,10 @@ class TextPanel(ft.Container):
             p.update()
             if res["matched"]:
                 msg = f"✓ Verified! All items sum up to total: {res['total']:,.2f}"
-                color = "#10B981" if not theme.is_dark else "#34D399"
+                color = theme.success
             else:
                 msg = f"⚠ Mismatch: Items sum ({res['calculated']:,.2f}) vs Stated total ({res['total']:,.2f})"
-                color = "#F59E0B" if not theme.is_dark else "#FBBF24"
+                color = theme.warning
             p.show_dialog(
                 ft.SnackBar(
                     content=ft.Text(msg, size=13, weight=ft.FontWeight.W_500, color=color),
@@ -1057,7 +1053,7 @@ class TextPanel(ft.Container):
                     if p:
                         p.show_dialog(
                             ft.SnackBar(
-                                content=ft.Text(f"AI aligned {len(boxes)} paragraph coordinates with pinpoint accuracy!", size=13, color="#10B981"),
+                                content=ft.Text(f"Aligned {len(boxes)} paragraphs with the scanned image.", size=13, color=theme.success),
                                 bgcolor=theme.glass_bg,
                                 duration=2500,
                             )
@@ -1066,7 +1062,7 @@ class TextPanel(ft.Container):
                     if p:
                         p.show_dialog(
                             ft.SnackBar(
-                                content=ft.Text("AI returned no boxes, using paper bounds.", size=13, color=theme.text_secondary),
+                                content=ft.Text("Couldn't pinpoint paragraphs — showing the full page instead.", size=13, color=theme.text_secondary),
                                 bgcolor=theme.glass_bg,
                             )
                         )
@@ -1074,7 +1070,7 @@ class TextPanel(ft.Container):
                 if p:
                     p.show_dialog(
                         ft.SnackBar(
-                            content=ft.Text(f"AI alignment failed: {str(ex)}", size=13, color="#EF4444"),
+                            content=ft.Text("Couldn't align paragraphs — showing the full page instead.", size=13, color=theme.error),
                             bgcolor=theme.glass_bg,
                         )
                     )
@@ -1193,7 +1189,7 @@ class TextPanel(ft.Container):
                 try:
                     p.show_dialog(
                         ft.SnackBar(
-                            content=ft.Text("No extracted text to copy", size=13, color=theme.text_secondary),
+                            content=ft.Text("Nothing to copy yet — extract text first.", size=13, color=theme.text_secondary),
                             bgcolor=theme.glass_bg,
                             duration=1800,
                         )
@@ -1405,7 +1401,7 @@ class TextPanel(ft.Container):
         # bottom toolbar. Short duration so empty-state hints auto-clear.
         page.show_dialog(
             ft.SnackBar(
-                content=ft.Text(message, size=13, color=theme.text_primary if bgcolor != "#EF4444" else "#FFFFFF"),
+                content=ft.Text(message, size=13, color=theme.text_primary if bgcolor != theme.error else "#FFFFFF"),
                 bgcolor=bgcolor or theme.glass_bg,
                 duration=duration,
                 behavior=ft.SnackBarBehavior.FLOATING,
@@ -1421,7 +1417,7 @@ class TextPanel(ft.Container):
         item = state.selected_item
         text_content = self.raw_output_field.value or (item.extracted_text if item else "")
         if not text_content and not any(it.extracted_text for it in state.queue):
-            self._toast(p, "No extracted text to export.", duration=2000)
+            self._toast(p, "Nothing to export yet — extract text first.", duration=2000)
             return
 
         def save_file(ext: str, content: str, filename_override: str = None):
@@ -1439,7 +1435,7 @@ class TextPanel(ft.Container):
                 folder_name = os.path.basename(target_dir) or target_dir
                 self._toast(p, f"Saved {fname} to {folder_name}", duration=2500)
             except Exception as ex:
-                self._toast(p, f"Export failed: {str(ex)}", duration=3000, bgcolor="#EF4444")
+                self._toast(p, "Couldn't save the export file. Please try again.", duration=3000, bgcolor=theme.error)
 
         def export_merged(ext: str):
             completed = [it for it in state.queue if it.extracted_text and it.extracted_text.strip()]
@@ -1679,12 +1675,7 @@ class TextPanel(ft.Container):
         if hasattr(self, "toolbar_divider"):
             self.toolbar_divider.bgcolor = theme.border
 
-        self.extract_btn.style = ft.ButtonStyle(
-            shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
-            side=ft.BorderSide(2, theme.accent),
-            bgcolor=theme.accent,
-            padding=ft.Padding.symmetric(horizontal=12, vertical=8),
-        )
+        self.extract_btn.style = primary_button_style()
 
         self.output_mode_btn.bgcolor = theme.button_bg
         self.output_mode_btn.border = ft.Border.all(1, theme.border)

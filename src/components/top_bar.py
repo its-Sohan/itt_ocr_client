@@ -16,7 +16,7 @@ class TopBar(ft.Container):
 
         # Brand / Logo with European pixel art scan icon
         self.app_icon = ft.Image(
-            src="assets/app_icon_dark.svg" if theme.is_dark else "assets/app_icon.svg",
+            src="app_icon_dark.svg" if theme.is_dark else "app_icon.svg",
             width=20,
             height=20,
             fit=ft.BoxFit.CONTAIN,
@@ -49,6 +49,7 @@ class TopBar(ft.Container):
         )
 
         self.cmd_palette_btn = ft.Container(
+            expand=True,
             content=ft.Row(
                 spacing=8,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -94,15 +95,6 @@ class TopBar(ft.Container):
             on_click=self.on_settings,
         )
 
-        # Theme toggle button
-        self.theme_btn = ft.IconButton(
-            icon=ft.Icons.DARK_MODE_OUTLINED if not theme.is_dark else ft.Icons.LIGHT_MODE_OUTLINED,
-            icon_color=theme.text_secondary,
-            icon_size=18,
-            tooltip="Toggle theme",
-            on_click=self._toggle_theme,
-        )
-
         inner_row = ft.Row(
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -126,7 +118,6 @@ class TopBar(ft.Container):
                     controls=[
                         self.dashboard_btn,
                         self.settings_btn,
-                        self.theme_btn,
                     ],
                 ),
             ],
@@ -146,19 +137,13 @@ class TopBar(ft.Container):
 
         theme.add_listener(self.update_theme_ui)
 
-    def _toggle_theme(self, e):
-        try:
-            theme.toggle_theme()
-        except Exception as ex:
-            print(f"Theme toggle error: {ex}")
-
     def update_theme_ui(self):
         unfreeze(self)
         self.bgcolor = theme.glass_bg
         self.border = theme.glass_border
         self.shadow = theme.glass_shadow
         self.brand_text.color = theme.text_primary
-        self.app_icon.src = "assets/app_icon_dark.svg" if theme.is_dark else "assets/app_icon.svg"
+        self.app_icon.src = "app_icon_dark.svg" if theme.is_dark else "app_icon.svg"
 
         self.cmd_palette_btn.bgcolor = theme.surface
         self.cmd_palette_btn.border = ft.Border.all(1, theme.border)
@@ -171,8 +156,6 @@ class TopBar(ft.Container):
         self.history_btn.icon_color = theme.text_secondary
         self.dashboard_btn.icon_color = theme.text_secondary
         self.settings_btn.icon_color = theme.text_secondary
-        self.theme_btn.icon = ft.Icons.DARK_MODE_OUTLINED if not theme.is_dark else ft.Icons.LIGHT_MODE_OUTLINED
-        self.theme_btn.icon_color = theme.text_secondary
 
         safe_update(self)
 

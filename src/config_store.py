@@ -13,7 +13,7 @@ DEFAULT_CONFIG = {
     "auto_extract": True,
     "default_output_mode": "document",
     "quality": "standard",
-    "releases_repo": "its-Sohan/itt-ocr-releases",
+    "releases_repo": "its-Sohan/itt-ocr-release",
     "check_updates_on_startup": True,
     "usage_stats": {
         "total_scanned_or_uploaded": 0,
@@ -79,4 +79,3 @@ def save_history(items: list):
             json.dump(items, f, indent=2, ensure_ascii=False)
     except Exception as ex:
         print(f"Failed to save history: {ex}")
-

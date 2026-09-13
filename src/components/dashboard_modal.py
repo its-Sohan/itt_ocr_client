@@ -1,5 +1,5 @@
 import flet as ft
-from src.styles import theme, RADIUS_GLASS, RADIUS_PANEL, FONT_FAMILY_UI
+from src.styles import theme, RADIUS_GLASS, RADIUS_PANEL, FONT_FAMILY_UI, primary_button_style
 from src.config_store import load_config
 
 def create_dashboard_modal(page: ft.Page) -> ft.AlertDialog:
@@ -11,7 +11,7 @@ def create_dashboard_modal(page: ft.Page) -> ft.AlertDialog:
     success = stats.get("successful_runs", 0)
     failed = stats.get("failed_runs", 0)
     chars = stats.get("total_characters_extracted", 0)
-    success_rate = f"{(success / total_proc * 100):.1f}%" if total_proc > 0 else "100%"
+    success_rate = f"{(success / total_proc * 100):.1f}%" if total_proc > 0 else "—"
 
     def create_metric_card(title: str, value: str, subtitle: str, icon: str):
         return ft.Container(
@@ -137,13 +137,7 @@ def create_dashboard_modal(page: ft.Page) -> ft.AlertDialog:
                     controls=[
                         ft.ElevatedButton(
                             "Close",
-                            style=ft.ButtonStyle(
-                                bgcolor=theme.accent,
-                                color="#FFFFFF",
-                                shape=ft.RoundedRectangleBorder(radius=RADIUS_PANEL),
-                                padding=ft.Padding.symmetric(horizontal=16, vertical=10),
-                                side=ft.BorderSide(2, theme.accent),
-                            ),
+                            style=primary_button_style(),
                             on_click=on_close,
                         ),
                     ],

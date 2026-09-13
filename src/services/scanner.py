@@ -140,13 +140,20 @@ def scan_document() -> Tuple[str, Optional[str]]:
     """
     if is_windows():
         return scan_document_windows()
-    else:
-        # Non-Windows development fallback: generates a test simulated document image
+    # Non-Windows: there is no WIA scanner stack here. A simulated image is
+    # only generated when the developer explicitly opts in (local dev/testing),
+    # so end users never receive a fake "scan".
+    if os.environ.get("ITT_OCR_ALLOW_SIMULATED_SCAN") == "1":
         temp_dir = Path(tempfile.gettempdir()) / "itt_ocr_scans"
         temp_dir.mkdir(parents=True, exist_ok=True)
         sample_path = temp_dir / f"simulated_scan_{int(time.time())}.png"
         _create_test_scan_image(str(sample_path))
         return ("SUCCESS", str(sample_path))
+    return (
+        "NO_DEVICE",
+        "Direct scanning needs Windows (WIA). On this system, please scan "
+        "with your device's own app, then load the file with Browse or Paste.",
+    )
 
 def _create_test_scan_image(output_path: str):
     """Creates a minimal valid PNG test page for testing without hardware."""
