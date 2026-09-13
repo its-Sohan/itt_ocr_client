@@ -82,6 +82,29 @@ def encode_image_base64(file_path: str) -> str:
     with open(file_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
+def resolve_chat_endpoint(base_url: str) -> str:
+    """
+    Normalizes base endpoint URLs into a valid OpenAI-compatible /chat/completions URL.
+    Specifically handles Google Gemini's OpenAI-compatible endpoint route:
+    https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
+    """
+    clean = (base_url or "").strip().rstrip("/")
+    if not clean:
+        clean = "https://api.openai.com/v1"
+
+    if "generativelanguage.googleapis.com" in clean:
+        if clean.endswith("/chat/completions"):
+            return clean
+        if not clean.endswith("/openai"):
+            if clean.endswith("/v1") or clean.endswith("/v1beta"):
+                clean = clean.rsplit("/", 1)[0]
+            clean = f"{clean}/v1beta/openai"
+        return f"{clean}/chat/completions"
+
+    if clean.endswith("/chat/completions"):
+        return clean
+    return f"{clean}/chat/completions"
+
 async def extract_text_with_llm(file_path: str, mode: str = "document", model: Optional[str] = None) -> str:
     """
     Sends the image to an OpenAI-compatible vision endpoint with mode-specific instructions
@@ -91,11 +114,8 @@ async def extract_text_with_llm(file_path: str, mode: str = "document", model: O
     config = load_config()
     api_key = config.get("api_key", "").strip()
     raw_base = config.get("base_url", "https://api.openai.com/v1").strip()
+    url = resolve_chat_endpoint(raw_base)
     clean_base = raw_base.rstrip("/")
-    if clean_base.endswith("/chat/completions"):
-        url = clean_base
-    else:
-        url = f"{clean_base}/chat/completions"
 
     model_name = (model or "").strip() or config.get("model_name", "gpt-4o-mini").strip()
 
@@ -181,6 +201,17 @@ async def extract_text_with_llm(file_path: str, mode: str = "document", model: O
         except Exception:
             pass
         update_usage_stats(characters=0, success=False)
+        if response.status_code == 404:
+            raise RuntimeError(
+                f"Endpoint Not Found (404) at {url}. "
+                "This is not an auth error — the URL path does not exist on the server. "
+                "Please verify your Endpoint URL in Settings (for Google Gemini, use https://generativelanguage.googleapis.com/v1beta/openai)."
+            )
+        if response.status_code in (401, 403):
+            raise RuntimeError(
+                f"Authentication/Authorization Error ({response.status_code}): {error_detail}. "
+                "Please check your API key and permissions in Settings."
+            )
         raise RuntimeError(f"LLM API Error ({response.status_code}): {error_detail}")
 
     try:
@@ -212,11 +243,8 @@ async def align_blocks_with_ai(file_path: str, blocks: List[str]) -> List[dict]:
     config = load_config()
     api_key = config.get("api_key", "").strip()
     raw_base = config.get("base_url", "https://api.openai.com/v1").strip()
+    url = resolve_chat_endpoint(raw_base)
     clean_base = raw_base.rstrip("/")
-    if clean_base.endswith("/chat/completions"):
-        url = clean_base
-    else:
-        url = f"{clean_base}/chat/completions"
 
     model_name = config.get("model_name", "gpt-4o-mini").strip()
 
@@ -279,7 +307,25 @@ async def align_blocks_with_ai(file_path: str, blocks: List[str]) -> List[dict]:
         response = await client.post(url, headers=headers, json=payload)
 
     if response.status_code != 200:
-        raise RuntimeError(f"AI Alignment API Error ({response.status_code}): {response.text}")
+        error_detail = response.text
+        try:
+            err_json = response.json()
+            if "error" in err_json and "message" in err_json["error"]:
+                error_detail = err_json["error"]["message"]
+        except Exception:
+            pass
+        if response.status_code == 404:
+            raise RuntimeError(
+                f"AI Alignment Endpoint Not Found (404) at {url}. "
+                "This is not an auth error — the URL path does not exist on the server. "
+                "Please verify your Endpoint URL in Settings."
+            )
+        if response.status_code in (401, 403):
+            raise RuntimeError(
+                f"AI Alignment Authentication/Authorization Error ({response.status_code}): {error_detail}. "
+                "Please check your API key in Settings."
+            )
+        raise RuntimeError(f"AI Alignment API Error ({response.status_code}): {error_detail}")
 
     result_json = response.json()
     choices = result_json.get("choices", [])
